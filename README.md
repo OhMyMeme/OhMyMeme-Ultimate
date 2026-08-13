@@ -53,13 +53,43 @@ npm run dev
 
 浏览器访问 `http://localhost:3000`。
 
+## 📦 部署（Release 解压即用）
+
+维护者打 `v*` tag 后，GitHub Actions 会自动 `npm run build` 并把编译产物打包发布到 **GitHub Releases**（`.zip` + `.tar.gz`）。用户无需克隆源码、无需 `npm install`。
+
+### 用户侧：下载解压即用
+
+1. 从 [Releases](https://github.com/OhMyMeme/OhMyMeme-Ultimate/releases) 下载 `ohmymeme-ultimate-*.zip` 并解压。
+2. 确保已安装 **Node.js ≥ 20**（仅需运行时，无需 `npm install`）。
+3. 准备好 **MongoDB**（本地或 [MongoDB Atlas](https://www.mongodb.com/atlas) 云数据库）。
+4. 将 `.env.example` 复制为 `.env`，填写 `NUXT_MONGOOSE_URI`。
+5. 启动：
+   - Windows：双击 `start.bat`
+   - Linux / macOS：`./start.sh`
+   - 或命令行：`node start.mjs`
+6. 访问 `http://localhost:3000`。
+
+> 编译产物（`.output`）已内置全部运行时依赖，上传的表情文件保存在解压目录下的 `.data/uploads/memes`。
+
+### 从源码运行（开发者）
+
+```bash
+npm install
+npm run dev          # 开发服务器
+npm run build        # 生产构建（产出 .output）
+node .output/server/index.mjs   # 运行生产构建
+```
+
+> 注意本项目依赖常驻的 Node 服务端与 MongoDB，**不支持** `npm run generate` 的纯静态托管。
+
 ## ⚙️ 环境变量
 
 | 变量 | 说明 | 默认值 |
 | --- | --- | --- |
-| `NUXT_MONGOOSE_URI` | MongoDB 连接串 | `mongodb://localhost:27017/ohmymeme` |
-| `NUXT_STORAGE_LOCAL_DIR` | 表情文件本地存储目录 | `.data/uploads/memes` |
-| `NUXT_PUBLIC_SITE_URL` | 站点公开 URL（`nuxt generate` 时用于 OG 图） | — |
+| `NUXT_MONGOOSE_URI` | MongoDB 连接串（运行时，必填） | `mongodb://localhost:27017/ohmymeme` |
+| `PORT` | 监听端口 | `3000` |
+| `HOST` | 监听地址 | `0.0.0.0` |
+| `NUXT_STORAGE_LOCAL_DIR` | 表情文件存储目录（**构建时**生效，仅开发者） | `.data/uploads/memes` |
 
 ## 📖 常用命令
 

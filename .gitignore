@@ -24,3 +24,8 @@ logs
 !.env.example
 
 REVIEW.md
+RELEASE.md
+
+
+.agents
+.claude
