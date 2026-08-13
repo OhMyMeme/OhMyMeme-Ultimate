@@ -1,0 +1,33 @@
+{
+  "name": "ohmymeme-ultimate",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "lint": "eslint .",
+    "migrate:memes": "node --env-file=.env scripts/migrate-memes.mjs",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@nuxt/ui": "^4.10.0",
+    "@vueuse/core": "^14.4.0",
+    "@vueuse/nuxt": "^14.4.0",
+    "nuxt": "^4.5.2",
+    "nuxt-mongoose": "^1.1.2",
+    "tailwindcss": "^4.3.3",
+    "vue": "^3.5.40",
+    "vue-router": "^5.2.0"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.122",
+    "@nuxt/eslint": "^1.17.0",
+    "@nuxt/icon": "^2.4.1",
+    "@types/node": "^26.2.0",
+    "typescript": "^6.0.3",
+    "vue-tsc": "^3.3.9"
+  }
+}
