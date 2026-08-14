@@ -20,14 +20,16 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Build
-        run: npm run build
+        run: npm run build:web
 
       - name: Assemble release folder
+        working-directory: nuxt-app
         run: |
           mkdir -p dist/ohmymeme-ultimate
           cp -r .output dist/ohmymeme-ultimate/.output
@@ -39,10 +41,10 @@ jobs:
           chmod +x dist/ohmymeme-ultimate/start.sh
 
       - name: Create archives
+        working-directory: nuxt-app/dist
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          cd dist
           tar -czf "ohmymeme-ultimate-${TAG}.tar.gz" ohmymeme-ultimate
           python3 -c "import shutil; shutil.make_archive('ohmymeme-ultimate-${TAG}', 'zip', '.', 'ohmymeme-ultimate')"
 
@@ -52,5 +54,5 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           make_latest: ${{ !contains(github.ref_name, '-') }}
           files: |
-            dist/*.tar.gz
-            dist/*.zip
+            nuxt-app/dist/*.tar.gz
+            nuxt-app/dist/*.zip

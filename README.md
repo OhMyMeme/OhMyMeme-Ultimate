@@ -19,6 +19,7 @@
 - **一键复制**：点击表情即复制到剪贴板（GIF 保留动画，见下方说明）
 - **总览统计**：表情总数、分组数、存储占用
 - **现代 UI**：基于 Nuxt UI 的 Dashboard 布局，深色 / 浅色模式，主题色可切换
+- **双端形态**：Web 端（`nuxt-app/`）+ 桌面端（`tarui-app/`，Tauri），桌面端复用 Web 后端 API
 
 ## 🛠 技术栈
 
@@ -33,25 +34,30 @@
 
 ## 🚀 快速开始
 
+> 本仓库为 monorepo：**npm workspaces + Turborepo**。`nuxt-app/`（Web 端，唯一后端）、`tarui-app/`（桌面端，Tauri）。根目录一条命令即可启动，无需 `cd` 进子目录。
+
 ### 前置要求
 
 - Node.js ≥ 20
 - MongoDB（本地或远程）
+- 桌面端另需 Rust / Tauri 环境（仅开发 `tarui-app/` 时需要）
 
 ### 安装与启动
 
 ```bash
-# 安装依赖
+# 在仓库根安装全部依赖（workspaces 统一安装，单一 package-lock.json）
 npm install
 
 # 配置环境变量（复制模板并按需修改）
-cp .env.example .env
+cp nuxt-app/.env.example nuxt-app/.env
 
-# 启动开发服务器
+# 同时启动 Web 与桌面（主应用双端）
 npm run dev
 ```
 
-浏览器访问 `http://localhost:3000`。
+浏览器访问 `http://localhost:3000`（Web），桌面端（Tauri）会同时弹出窗口。
+
+> 桌面端首次启动需在连接页自行填写服务端地址（Web 常部署在云端），本地调试填 `http://localhost:3000`。
 
 ## 📦 部署（Release 解压即用）
 
@@ -74,10 +80,10 @@ npm run dev
 ### 从源码运行（开发者）
 
 ```bash
-npm install
+npm install          # 仓库根安装全部依赖（workspaces）
 npm run dev          # 开发服务器
-npm run build        # 生产构建（产出 .output）
-node .output/server/index.mjs   # 运行生产构建
+npm run build        # 生产构建（产出 nuxt-app/.output）
+node nuxt-app/.output/server/index.mjs   # 运行生产构建
 ```
 
 > 注意本项目依赖常驻的 Node 服务端与 MongoDB，**不支持** `npm run generate` 的纯静态托管。
@@ -94,31 +100,42 @@ node .output/server/index.mjs   # 运行生产构建
 ## 📖 常用命令
 
 ```bash
-npm run dev          # 开发服务器
-npm run build        # 生产构建
-npm run generate     # 静态生成（SSG）
-npm run preview      # 预览生产构建
-npm run lint         # ESLint 检查
-npm run typecheck    # TS 类型检查
-npm run migrate:memes # 数据迁移（旧 group 字符串 → groupId ObjectId）
+# 仓库根（Turborepo 编排，无需 cd）
+npm run dev            # 同时启动 Web（ohmymeme-web）与桌面（Tauri）
+npm run dev:web        # 仅 Web 开发服务器
+npm run dev:desktop    # 仅桌面端（Tauri，需先运行 dev:web 提供后端）
+npm run dev:desktop:web  # 桌面端前端（仅 Vite dev，不启动 Tauri 壳）
+npm run build          # Web 生产构建
+npm run build:desktop  # 桌面端生产构建
+npm run lint           # ESLint 检查（两个 workspace）
+npm run typecheck      # TS 类型检查
+
+# 或直接进入子目录（等同）
+cd nuxt-app && npm run dev          # Web 开发服务器
+cd tarui-app && npm run dev         # 桌面端（Tauri）
 ```
 
 ## 📁 项目结构
 
 ```
-app/
-  assets/          # 样式等静态资源
-  components/      # 全局组件（GroupCoverCard / MemeCard / UploadMemeModal 等）
-  composables/     # useAuth / useMemes / useCopyMeme / useOverview 等
-  layouts/         # default（Dashboard）/ auth 布局
-  pages/           # 页面路由（/、/dashboard、/memes、/memes/:group）
-  middleware/      # 路由中间件（auth）
-  utils/           # 工具函数（getErrorMessage 等）
-server/
-  api/             # Nitro API 路由（groups / memes / overview）
-  models/          # Mongoose 模型（Group / Meme）
-  utils/           # 服务端工具（storage / validate / dto）
-scripts/           # 数据迁移脚本
+nuxt-app/              # Web 端 workspace（ohmymeme-web，Nuxt 4，唯一后端）
+  app/
+    assets/          # 样式等静态资源
+    components/      # 全局组件（GroupCoverCard / MemeCard / UploadMemeModal 等）
+    composables/     # useAuth / useMemes / useCopyMeme / useOverview 等
+    layouts/         # default（Dashboard）/ auth 布局
+    pages/           # 页面路由（/、/dashboard、/memes、/memes/:group）
+    middleware/      # 路由中间件（auth）
+    utils/           # 工具函数（getErrorMessage 等）
+  server/
+    api/             # Nitro API 路由（groups / memes / overview）
+    models/          # Mongoose 模型（Group / Meme）
+    utils/           # 服务端工具（storage / validate 等）
+tarui-app/             # 桌面端 workspace（ohmymeme-desktop，Tauri + Vue + Vite）
+  src/               # Vue 前端（复用 Nuxt UI，走 HTTP 调用后端 API）
+  src-tauri/         # Rust 壳层（系统托盘、原生剪贴板、全局快捷键等）
+turbo.json             # Turborepo 任务编排
+.npmrc                 # legacy-peer-deps=true（桌面端 peer 冲突）
 ```
 
 ## 🔌 核心 API
@@ -142,13 +159,14 @@ scripts/           # 数据迁移脚本
 - [ ] 搜索、标签（多标签交集筛选）、收藏、最近使用
 - [ ] 图片处理（WebP 缩放 / 转 GIF / 隐写还原）
 - [ ] 云端存储（S3）
-- [ ] 桌面客户端（原生剪贴板、系统托盘、全局快捷键）
+- [x] 桌面端原生剪贴板（GIF 经 `CF_HDROP` 复制，静态图经 `writeImage`）
+- [ ] 系统托盘、全局快捷键等桌面原生能力
 - [ ] 真实鉴权（当前登录为占位实现）
 
 ## ⚠️ 已知限制
 
 - **鉴权**：当前登录态为占位实现（未做服务端校验），**仅适合本地 / 内网演示，请勿直接部署到公网**。
-- **GIF 复制（Web 端）**：浏览器无法向剪贴板写入 `image/gif`，因此粘贴进网页 / 富文本为动图，粘贴进 QQ / 微信原生客户端为静态图。要保留动画需桌面客户端走原生剪贴板（Electron / Tauri）。
+- **GIF 复制（Web 端）**：浏览器无法向剪贴板写入 `image/gif`，因此粘贴进网页 / 富文本为动图，粘贴进 QQ / 微信原生客户端为静态图。要保留动画需桌面客户端（`tarui-app/`）走原生剪贴板（Tauri）。
 - **存储**：当前仅本地文件系统（`unstorage` 的 `fs` driver），S3 后端待扩展。
 
 ## 🙏 致谢

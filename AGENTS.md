@@ -20,14 +20,31 @@
 - **所有操作云端即时反馈**：导入、删除、打标签、移动分组等操作实时写入服务端并立即反映到界面，不做离线编辑、不与云端产生分歧。
 - 前端一切读写都经由服务端 API，客户端不持有独立的持久化状态模型。
 
-## 架构形态：Web 与桌面共享后端 API
+## 仓库结构：monorepo（Web + 桌面双端）
 
-项目同时面向 **Web** 与 **桌面** 两个形态：
+本仓库为 **monorepo**，采用 **npm workspaces + Turborepo** 管理：两个子项目（workspace）各有独立的 `package.json`，依赖统一在根目录安装（单一 `package-lock.json`），任务编排由根目录 `turbo.json` 调度：
 
-- **Web 端**：浏览器直接访问，依赖剪贴板、WebSocket 等标准 Web 能力。
-- **桌面端**：**复用 Web 的后端 API**，通过 HTTP/WebSocket 与同一套服务端（Nitro）通信。桌面端只承担壳层能力（系统托盘、全局快捷键、本地文件系统访问、原生剪贴板等浏览器受限的能力）。
+```
+nuxt-app/                # Web 端 workspace（包名 ohmymeme-web，Nuxt 4 全栈应用，唯一后端）
+  app/                   # Nuxt 前端（组件、页面、composables、layouts 等）
+  server/                # Nitro 服务端（API 路由、中间件、模型、工具）
+  public/                # 静态资源
+  nuxt.config.ts         # Nuxt 配置
+tarui-app/               # 桌面端 workspace（包名 ohmymeme-desktop，Tauri + Vue + Vite，壳层）
+  src/                   # Vue 前端（复用 Nuxt UI，走 HTTP 调用后端 API）
+  src-tauri/             # Rust 壳层（系统托盘、原生剪贴板、全局快捷键等）
+  vite.config.ts         # Vite 配置（本地 dev 端口 1420）
+package.json             # 根（workspaces + turbo 代理脚本）
+turbo.json               # 任务编排（dev/build/lint/typecheck 等）
+.npmrc                   # legacy-peer-deps=true（桌面端 vite-plugin-vue-layouts 与 vite 6 的 peer 冲突）
+```
 
-因此，**服务端 API 是 Web 与桌面共同的核心契约**：所有业务逻辑（数据、图片处理、同步、鉴权）都应收敛在 `server/api` / `server/utils`，前端与桌面客户端只做调用与展示。新增功能时优先以 API 形式提供，而非在客户端内实现。
+- **Web 端**（`nuxt-app/`）：浏览器直接访问，依赖剪贴板、WebSocket 等标准 Web 能力；**唯一持有后端 API 与数据库**。
+- **桌面端**（`tarui-app/`）：**复用 Web 的后端 API**，通过 HTTP 与 `nuxt-app` 服务端（Nitro）通信。桌面端只承担壳层能力（系统托盘、全局快捷键、本地文件系统访问、原生剪贴板等浏览器受限的能力）。桌面端连接地址由用户在首次启动的连接页（`/connect`）自行输入，存于 `tarui-app/src/composables/useServer.ts` 的 `useStorage("ohmymeme_server_url")`（无默认值，未配置时强制进入连接页）；因 Web 常部署在云端而软件在本地，地址通常指向云端服务（本地调试可填 `http://localhost:3000`）。
+
+因此，**服务端 API 是 Web 与桌面共同的核心契约**：所有业务逻辑（数据、图片处理、同步、鉴权）都应收敛在 `nuxt-app/server/api` / `nuxt-app/server/utils`，前端与桌面客户端只做调用与展示。新增功能时优先以 API 形式提供，而非在客户端内实现。
+
+> 桌面端依赖 Web 端 API，连接地址由用户自行输入（无默认值）。`npm run dev` 会同时启动 Web 与桌面；若单独 `npm run dev:desktop`，需先运行 Web 服务（`npm run dev:web`）作为后端，否则无法拉取数据。
 
 ## 技术栈
 
@@ -38,69 +55,80 @@
 | 样式 | Tailwind CSS v4 + Nuxt UI v4 (`@nuxt/ui`) | 基于官方 [dashboard 模板](https://github.com/nuxt-ui-templates/dashboard) 复刻，UI 组件统一 `U` 前缀（`UButton` / `UCard` / `UDashboardPanel` 等） |
 | 图标 | `@nuxt/icon` + `@iconify-json/lucide` | 统一使用 lucide 图标集，写法 `i-lucide-smile`（Nuxt UI 约定前缀），按需打包 |
 | 工具 | `@vueuse/core` + `@vueuse/nuxt` | `useLocalStorage` 等组合式工具 |
-| 代码规范 | `@nuxt/eslint@^1.17.0` | flat config，基于 `./.nuxt/eslint.config.mjs` |
-| 数据库 | MongoDB（`nuxt-mongoose@^1`，基于 Mongoose 9） | Nuxt 模块自动连接（懒处理，连接失败仅报错不崩溃），连接串 `NUXT_MONGOOSE_URI`；模型放 `server/models/`（`defineMongooseModel` 定义并自动导入） |
-| 存储后端 | S3 + 本地（暂时仅这两种） | 服务端 `server/utils` 统一封装，新增存储时只扩展该层 |
+| 代码规范 | `@nuxt/eslint@^1.17.0` | flat config，基于 `./nuxt-app/.nuxt/eslint.config.mjs` |
+| 数据库 | MongoDB（`nuxt-mongoose@^1`，基于 Mongoose 9） | Nuxt 模块自动连接（懒处理，连接失败仅报错不崩溃），连接串 `NUXT_MONGOOSE_URI`；模型放 `nuxt-app/server/models/`（`defineMongooseModel` 定义并自动导入） |
+| 存储后端 | S3 + 本地（暂时仅这两种） | 服务端 `nuxt-app/server/utils` 统一封装，新增存储时只扩展该层 |
+| 桌面壳 | Tauri 2 + Vue 3 + Vite | `tarui-app/`，走 HTTP 复用 `nuxt-app` 的 API |
 
 ## 常用命令
 
+> 根目录 `package.json` 通过 **Turborepo** 编排任务（`turbo run <task>`，带增量缓存）。`dev` 默认同时启动 Web 与桌面（主应用双端），也可用带后缀的脚本单独启动某一端。
+
 ```bash
-npm run dev        # 开发服务器
-npm run build      # 生产构建
-npm run generate   # 静态生成（SSG）
-npm run preview    # 预览生产构建
-npm run lint       # ESLint 检查（改代码后必须运行）
-npm run typecheck  # TS 类型检查（vue-tsc，改代码后建议运行）
-npm run migrate:memes  # 数据迁移（旧 `group` 字符串 → `groupId` ObjectId，幂等可重复执行）
-npm run postinstall  # = nuxt prepare，生成 .nuxt 类型与 eslint 配置
+# 根目录（推荐，无需 cd）
+npm run dev            # 同时启动 Web（ohmymeme-web）与桌面（ohmymeme-desktop，Tauri）
+npm run dev:web        # 仅 Web 开发服务器
+npm run dev:desktop    # 仅桌面端（Tauri，需先运行 Web 服务提供后端）
+npm run dev:desktop:web  # 桌面端前端（仅 Vite dev，不启动 Tauri 壳）
+npm run lint           # ESLint 检查（改代码后必须运行，两个 workspace）
+npm run typecheck      # TS 类型检查（vue-tsc）
+npm run build          # Web 生产构建（ohmymeme-web）
+npm run build:desktop  # 桌面端生产构建（ohmymeme-desktop）
+
+# 也可在子目录内运行各自的脚本（等同）
+cd nuxt-app && npm run dev
+cd tarui-app && npm run dev
 ```
 
-> 修改 `nuxt.config.ts`、`app.config.ts` 或新增页面/组件后，可能需要重新运行 `npm run postinstall`（`nuxt prepare`）以刷新类型。
+> 修改 `nuxt.config.ts`、`app.config.ts` 或新增页面/组件后，可能需要重新运行 `npm install`（触发 workspace 的 `postinstall` = `nuxt prepare`）以刷新类型。
 
 > [!CAUTION]
-> **数据模型变更必须配套迁移**：MongoDB 无 schema 迁移机制，任何字段改名/类型变更（例如本次 `Meme.group: string` → `Meme.groupId: ObjectId`）都必须提供**幂等的迁移脚本**（放 `scripts/`，如 `scripts/migrate-memes.mjs`，用 `node --env-file=.env` 运行），上线前先对存量数据执行迁移，不得直接改动字段导致旧数据不可见。
+> **数据库 schema 以「一次设计到位」为目标**：MongoDB 无 schema 迁移机制，字段改名/类型变更成本高且易丢数据。新增字段前先确认是否需要，尽量在 `nuxt-app/server/models/*.schema.ts` 一次性定义完整结构（含索引与 `timestamps`），避免后期迁移。存量数据已为最新结构（`groupId: ObjectId` 引用分组），不存在旧字段数据，**无需也禁止再引入迁移脚本**。
 
 > [!CAUTION]
 > **AI 严禁自行启动 dev 服务器（`npm run dev`）**：不得以任何方式（包括后台进程、`Start-Process` 等）启动开发服务器。验证、测试或联调一律由用户在终端手动运行 `npm run dev`。AI 只允许在用户已自行启动的 dev 服务器上进行请求级验证（如 `curl`）。任务结束前必须确保 AI 未残留任何 dev 相关进程。
 
 ## 目录结构约定（Nuxt 4）
 
-Nuxt 4 采用 `app/` 目录布局，源文件位于 `app/` 而非根目录：
+Nuxt 4 采用 `app/` 目录布局，源文件位于 `nuxt-app/app/` 而非根目录：
 
 ```
-app/
-  app.vue               # 根组件
-  assets/               # 样式、图片等静态资源（可被编译处理）
-  components/           # 全局自动导入组件（无需手动 import）
-  composables/          # 自动导入的 hooks（useXxx）
-  layouts/              # 布局组件（default.vue 等）
-  pages/                # 页面路由（文件即路由）
-  middleware/           # 路由中间件
-  plugins/              # Vue/Nuxt 插件
-  utils/                # 自动导入的工具函数
-  error.vue             # 全局错误页
-server/                 # Nitro 服务端（API 路由 / server/api、中间件、插件）
-  api/
-  middleware/
-  utils/
-public/                 # 静态资源（favicon、robots 等），URL 根路径直接映射
+nuxt-app/
+  app/
+    app.vue               # 根组件
+    assets/               # 样式、图片等静态资源（可被编译处理）
+    components/           # 全局自动导入组件（无需手动 import）
+    composables/          # 自动导入的 hooks（useXxx）
+    layouts/              # 布局组件（default.vue 等）
+    pages/                # 页面路由（文件即路由）
+    middleware/           # 路由中间件
+    plugins/              # Vue/Nuxt 插件
+    utils/                # 自动导入的工具函数
+    error.vue             # 全局错误页
+  server/                 # Nitro 服务端（API 路由 / server/api、中间件、插件）
+    api/
+    middleware/
+    utils/
+  public/                 # 静态资源（favicon、robots 等），URL 根路径直接映射
 ```
 
 - 组件、composables、utils 均**自动导入**，不要在文件中手动 `import`（除非需要显式命名冲突处理）。
-- 服务端 API 路由放在 `server/api/**`，文件名即 URL 路径（如 `server/api/memes.get.ts` → `GET /api/memes`）。
-- 数据库访问、鉴权等服务端逻辑放 `server/utils/` 或 `server/services/`。
-- 桌面客户端（若为独立仓库/目录）只与 `server/api` 契约交互，不得直接访问数据库或服务端内部模块。
-- **列表页 + 详情页同级路由的写法（Nuxt 4.5 路由陷阱）**：`pages/x.vue` 与 `pages/x/[id].vue` 并存时，`[id].vue` 会被 unrouting 生成为 `x.vue` 的**嵌套子路由**，而 `x.vue` 内没有 `<NuxtPage>` 渲染子路由，导致 `/x/:id` 无法进入（点进去渲染的仍是 `x.vue`）。需要"列表页 + 详情页"同级路由时，请用 `pages/x/index.vue` + `pages/x/[id].vue`。当前表情库即为此结构：`app/pages/memes/index.vue`（`/memes` 列表）+ `app/pages/memes/[group].vue`（`/memes/:group` 详情）。
+- 服务端 API 路由放在 `nuxt-app/server/api/**`，文件名即 URL 路径（如 `nuxt-app/server/api/memes.get.ts` → `GET /api/memes`）。
+- 数据库访问、鉴权等服务端逻辑放 `nuxt-app/server/utils/` 或 `nuxt-app/server/services/`。
+- 桌面客户端（`tarui-app/`）只与 `server/api` 契约交互，不得直接访问数据库或服务端内部模块。
+- **列表页 + 详情页同级路由的写法（Nuxt 4.5 路由陷阱）**：`pages/x.vue` 与 `pages/x/[id].vue` 并存时，`[id].vue` 会被 unrouting 生成为 `x.vue` 的**嵌套子路由**，而 `x.vue` 内没有 `<NuxtPage>` 渲染子路由，导致 `/x/:id` 无法进入（点进去渲染的仍是 `x.vue`）。需要"列表页 + 详情页"同级路由时，请用 `pages/x/index.vue` + `pages/x/[id].vue`。当前表情库即为此结构：`nuxt-app/app/pages/memes/index.vue`（`/memes` 列表）+ `nuxt-app/app/pages/memes/[group].vue`（`/memes/:group` 详情）。桌面端 `tarui-app/src/pages/` 也沿用相同路由结构。
 
 ## 配置
 
-- **`nuxt.config.ts`**：模块、兼容性、运行时配置。当前已启用 `@nuxt/ui`、`@nuxt/eslint`、`@vueuse/nuxt`；`@nuxt/icon`、`@nuxt/fonts`、`@nuxtjs/color-mode` 由 Nuxt UI 自动注册（无需显式加入 `modules`）。表情文件存储通过 `nitro.storage.memes` 挂载（`unstorage` 的 `fs` driver，目录由 `NUXT_STORAGE_LOCAL_DIR` 配置，默认 `.data/uploads/memes`），切换 S3 只需改 driver。
-- **`.env`**：环境变量（本地配置），已包含 `NUXT_MONGOOSE_URI`。**严禁将密钥/密码写入代码或提交到仓库。**
-- **`eslint.config.mjs`**：基于 Nuxt 官方 flat config，继承 `.nuxt/eslint.config.mjs`。
+- **`nuxt-app/nuxt.config.ts`**：模块、兼容性、运行时配置。当前已启用 `@nuxt/ui`、`@nuxt/eslint`、`@vueuse/nuxt`；`@nuxt/icon`、`@nuxt/fonts`、`@nuxtjs/color-mode` 由 Nuxt UI 自动注册（无需显式加入 `modules`）。表情文件存储通过 `nitro.storage.memes` 挂载（`unstorage` 的 `fs` driver，目录由 `NUXT_STORAGE_LOCAL_DIR` 配置，默认 `.data/uploads/memes`），切换 S3 只需改 driver。
+- **`nuxt-app/.env`**：环境变量（本地配置），已包含 `NUXT_MONGOOSE_URI`。**严禁将密钥/密码写入代码或提交到仓库。**
+- **`nuxt-app/eslint.config.mjs`**：基于 Nuxt 官方 flat config，继承 `.nuxt/eslint.config.mjs`。
+- **根 `turbo.json`**：任务编排。`dev` / `dev:web` 标记为 `persistent`（不缓存、不退出），`build` 输出 `.output` / `dist`。新增任务时在此配置 `cache` / `outputs`。
+- **根 `.npmrc`**：`legacy-peer-deps=true`（因 tarui-app 的 `vite-plugin-vue-layouts@0.11` 声明 peer `vite@^4||^5`，而项目实际使用 vite 6）。
 
 ### 关于 Tailwind v4 + Nuxt UI 的注意事项
 
-- 样式入口是 `app/assets/css/main.css`：`@import "tailwindcss";` 后接 `@import "@nuxt/ui";`。
+- 样式入口是 `nuxt-app/app/assets/css/main.css`：`@import "tailwindcss";` 后接 `@import "@nuxt/ui";`。
 - **图标统一用 `i-lucide-xxx` 写法**（`@nuxt/icon` + `@iconify-json/lucide`），如 `<UIcon name="i-lucide-smile" />` 或组件 `icon` 属性传 `i-lucide-xxx`；Nuxt UI 按需打包。
 - **emoji 不传给 `icon` 属性**：`icon` 只接受 iconify 图标名，直接传 emoji（如 `icon: '🎯'`）不会被 `@nuxt/icon` 渲染（会被当作 iconify 图标去加载而失败）。表情类展示请把 emoji 写在 `label`/文本中。
 - **避免多色渐变背景**（如 `from-*-500 via-*-400 to-*-500`）与随意自定义色值，保持精致现代风（Linear/Notion 质感：大圆角、柔影、毛玻璃、呼吸感留白）。
@@ -109,7 +137,7 @@ public/                 # 静态资源（favicon、robots 等），URL 根路径
 ## 前端开发约定
 
 - **UI 基于官方 [dashboard 模板](https://github.com/nuxt-ui-templates/dashboard) 复刻**：沿用其 `UDashboardPanel` / `UDashboardSidebar` / `UDashboardNavbar` / `UDashboardToolbar` 等布局组件与侧边栏交互（可折叠、可拖拽宽度）。
-- **布局**：`app/layouts/default.vue` 为带侧边栏的 Dashboard 布局（受保护页面默认使用）；`app/layouts/auth.vue` 为纯净布局（无侧边栏，登录页使用）。
+- **布局**：`nuxt-app/app/layouts/default.vue` 为带侧边栏的 Dashboard 布局（受保护页面默认使用）；`nuxt-app/app/layouts/auth.vue` 为纯净布局（无侧边栏，登录页使用）。
 - **侧边栏导航**：`default.vue` 中「表情库」为带子级（各分组）的父菜单项，子级指向 `/memes/{group.id}`，父项自身仍指向 `/memes` 主页面（点击父项文字即返回主页面）；分组数据取自 `useMemes().groups`，子级用 `children` 数组挂在导航项上，且**父项设置 `value: 'memes'` 并通过 `v-model` 控制手风琴展开态**——进入 `/memes` 或任一分组页时自动展开分组列表（便于识别当前分组、快速切换），离开时收起。子级 `label` 用**纯文字分组名**（正式上线表情为图片形式，不再用 emoji 当标题）。新增层级导航时沿用此"父级入口 + 子级列表"结构。
 - **组件复用机制**：优先拆分可复用组件，任何被两个以上页面/组件使用的 UI 片段都应抽成独立组件。
 - **组件行数上限**：单个组件（template + script）不超过 **100~150 行**；超过时拆分到子组件、composables 或 utils，禁止堆砌。
@@ -141,9 +169,9 @@ public/                 # 静态资源（favicon、robots 等），URL 根路径
 
 浏览器硬限制：`navigator.clipboard.write()` 的 `ClipboardItem` **无法写入 `image/gif`**（Chrome 仅支持 `text/plain` / `text/html` / `image/png` 及少量新类型），且 QQ/微信等 Windows 原生客户端粘贴时只读位图格式（`CF_DIB` / `CF_BITMAP` / PNG）或文件拖放（`CF_HDROP`），**不解析 `text/html`**。因此：
 
-- **Web 端**（`app/composables/useCopyMeme.ts`）：GIF 采用「`text/html`（内嵌 `data:image/gif` 保动画）+ `image/png`（首帧静态回退）」双表示写入。结果是——粘贴进富文本/网页/Word 等 HTML 目标为**动图**，粘贴进 QQ/微信原生客户端为**静态图**（这是 Web 端可达到的上限）。
-- **桌面端**：要「动图贴进 QQ/微信」**必须走原生剪贴板**，写 `image/gif` 字节或 `.gif` 文件到系统剪贴板。落点：Electron 用 `clipboard.writeBuffer({ 'image/gif': buf })` / `clipboard.writeImage(nativeImage)`（需先解码 GIF 动画帧），或写入 `CF_HDROP`；Tauri 用 `clipboard-manager` / `arboard`。GIF 原始字节直接取现有端点 `GET /api/memes/:id/file`（`cache-control: immutable`）。**当前仓库尚无桌面壳目录**，此能力待桌面客户端落地后实现。
+- **Web 端**（`nuxt-app/app/composables/useCopyMeme.ts`）：GIF 采用「`text/html`（内嵌 `data:image/gif` 保动画）+ `image/png`（首帧静态回退）」双表示写入。结果是——粘贴进富文本/网页/Word 等 HTML 目标为**动图**，粘贴进 QQ/微信原生客户端为**静态图**（这是 Web 端可达到的上限）。
+- **桌面端**（已实现）：`tarui-app/src/composables/useCopyMeme.ts` 拉取 `GET /api/memes/:id/file`（`cache-control: immutable`）字节后，**所有图片（GIF/PNG/JPEG/WebP）统一**经自定义 Tauri 命令 `copy_file_to_clipboard`（`tarui-app/src-tauri/src/lib.rs`）把字节按 `mimeType` 写入对应扩展名的临时文件，并以 `CF_HDROP`（文件拖放）写入 Windows 剪贴板（依赖 `windows` crate 的 `OpenClipboard`/`SetClipboardData`/`GlobalAlloc`，仅 Windows 生效），QQ/微信粘贴即得图片（GIF 保留动画）。非 Tauri 环境回退浏览器 `navigator.clipboard`。
 
-> **当前进展**：表情存储暂定为**仅本地**。存储抽象在 `server/utils/storage.ts`（`save`/`read`/`remove`，基于 Nitro 自带的 `unstorage`，`nitro.storage.memes` 挂载，默认目录 `.data/uploads/memes`，由 `NUXT_STORAGE_LOCAL_DIR` 配置），扩展 S3 时只需改 `nuxt.config.ts` 的 driver。分组为独立实体 `server/models/group.schema.ts`（`GroupRecord`，中文名原生支持），表情 `server/models/meme.schema.ts`（`MemeRecord`）以 `groupId: ObjectId` 引用分组。现有 API：`GET/POST /api/groups`（`GET` 返回每组的 `count` 与 `covers` 封面图 URL，聚合取每类最新 4 张）、`PATCH/DELETE /api/groups/:id`（分组增删改）、`GET /api/memes`（按 `group` 分组过滤 + `limit`/`offset` 分页）、`POST /api/memes`（multipart 多文件上传，`groupId`）、`PATCH/DELETE /api/memes/:id`（改名/移动/删除）、`GET /api/memes/:id/file`（流式返回文件，`cache-control: immutable`）、`GET /api/overview`（总数/分组数/存储）。前端已接入 API：`useMemes()` 拉取分组并提供分组/表情的增删改（`refreshNuxtData` 刷新），分组详情页为页码式分页（48/页）；表情卡片用原生 `<img>` 直连文件端点（避免 IPX 二次代理、保留 GIF 动画）。ObjectId 校验统一走 `server/utils/validate.ts` 的 `isValidId`/`requireValidId`（`mongoose.isValidObjectId`）；前端错误解析统一走 `app/utils/error.ts` 的 `getErrorMessage` + `useAsyncAction`。
+> **当前进展**：表情存储暂定为**仅本地**。存储抽象在 `nuxt-app/server/utils/storage.ts`（`save`/`read`/`remove`，基于 Nitro 自带的 `unstorage`，`nitro.storage.memes` 挂载，默认目录 `.data/uploads/memes`，由 `NUXT_STORAGE_LOCAL_DIR` 配置），扩展 S3 时只需改 `nuxt-app/nuxt.config.ts` 的 driver。分组为独立实体 `nuxt-app/server/models/group.schema.ts`（`GroupRecord`，中文名原生支持），表情 `nuxt-app/server/models/meme.schema.ts`（`MemeRecord`）以 `groupId: ObjectId` 引用分组。现有 API：`GET/POST /api/groups`（`GET` 返回每组的 `count` 与 `covers` 封面图 URL，聚合取每类最新 4 张）、`PATCH/DELETE /api/groups/:id`（分组增删改）、`GET /api/memes`（按 `group` 分组过滤 + `limit`/`offset` 分页）、`POST /api/memes`（multipart 多文件上传，`groupId`）、`PATCH/DELETE /api/memes/:id`（改名/移动/删除）、`GET /api/memes/:id/file`（流式返回文件，`cache-control: immutable`）、`GET /api/overview`（总数/分组数/存储）。前端已接入 API：`useMemes()` 拉取分组并提供分组/表情的增删改（`refreshNuxtData` 刷新），分组详情页为页码式分页（48/页）；表情卡片用原生 `<img>` 直连文件端点（避免 IPX 二次代理、保留 GIF 动画）。ObjectId 校验统一走 `nuxt-app/server/utils/validate.ts` 的 `isValidId`/`requireValidId`（`mongoose.isValidObjectId`）；前端错误解析统一走 `app/utils/error.ts` 的 `getErrorMessage` + `useAsyncAction`。
 
 实现任何功能前先确认与上述规划的关系，保持模块边界清晰（页面 / 组件 / composable / server API / 数据模型分层），并优先以 API 形式暴露。

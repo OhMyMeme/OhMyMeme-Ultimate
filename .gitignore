@@ -6,6 +6,9 @@
 .cache
 dist
 
+# Turborepo cache
+.turbo
+
 # Node dependencies
 node_modules
 
