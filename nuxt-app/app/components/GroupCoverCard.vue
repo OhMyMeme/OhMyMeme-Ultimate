@@ -46,7 +46,7 @@ const covers = computed(() => props.group.covers.slice(0, 4))
       </p>
     </div>
 
-    <div class="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100" @click.stop>
+    <div class="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100" @click.stop>
       <GroupActionsMenu :group="group" />
     </div>
   </NuxtLink>

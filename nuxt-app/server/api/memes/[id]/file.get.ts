@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
 
   setResponseHeader(event, 'content-type', doc.mimeType)
   setResponseHeader(event, 'content-length', data.byteLength)
-  setResponseHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
+  setResponseHeader(event, 'cache-control', 'private, max-age=31536000, immutable')
 
   return data
 })

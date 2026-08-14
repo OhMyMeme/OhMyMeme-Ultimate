@@ -20,8 +20,9 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const serverUrl = localStorage.getItem("ohmymeme_server_url");
+  const sessionToken = localStorage.getItem("ohmymeme_session_token");
   const isConnect = to.path === "/connect" || to.path === "/";
-  if (!serverUrl && !isConnect) {
+  if ((!serverUrl || !sessionToken) && !isConnect) {
     return "/connect";
   }
 });

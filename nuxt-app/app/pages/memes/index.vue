@@ -9,6 +9,7 @@ const { groups } = await useMemes()
     <template #header>
       <UDashboardNavbar title="表情库" :ui="{ right: 'gap-3' }">
         <template #leading>
+          <UDashboardSidebarToggle />
           <UDashboardSidebarCollapse />
         </template>
 

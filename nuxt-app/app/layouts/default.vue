@@ -4,6 +4,8 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 const route = useRoute()
 const open = ref(false)
 
+useRealtime()
+
 const { groups: memeGroups } = await useMemes()
 
 const navigationOpen = ref<string[]>(route.path.startsWith('/memes') ? ['memes'] : [])

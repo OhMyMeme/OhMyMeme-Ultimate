@@ -3,7 +3,8 @@ export default defineNuxtConfig({
     '@nuxt/eslint',
     '@nuxt/ui',
     '@vueuse/nuxt',
-    'nuxt-mongoose'
+    'nuxt-mongoose',
+    'nuxt-auth-utils'
   ],
 
   devtools: {
@@ -11,6 +12,10 @@ export default defineNuxtConfig({
   },
 
   css: ['~/assets/css/main.css'],
+
+  runtimeConfig: {
+    accessToken: ''
+  },
 
   routeRules: {
     '/api/**': {
@@ -21,6 +26,9 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-06-30',
 
   nitro: {
+    experimental: {
+      websocket: true
+    },
     storage: {
       memes: {
         driver: 'fs',

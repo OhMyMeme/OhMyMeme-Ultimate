@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { NavigationMenuItem } from "@nuxt/ui";
 import { useMemes } from "../composables/useMemes";
+import { useRealtime } from "../composables/useRealtime";
 
 const route = useRoute();
 const router = useRouter();
@@ -11,6 +12,8 @@ const open = ref(false);
 const memes = useMemes();
 const memeGroups = memes.groups;
 await memes.refresh();
+
+useRealtime();
 
 const navigationOpen = ref<string[]>(route.path.startsWith("/memes") ? ["memes"] : []);
 

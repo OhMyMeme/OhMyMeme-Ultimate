@@ -1,5 +1,6 @@
 import type { Meme, MemeGroup, MemeListResponse, Overview } from "../types";
 import { useServer } from "./useServer";
+import { useAuth } from "./useAuth";
 
 export interface BatchResult {
   count: number
@@ -7,10 +8,23 @@ export interface BatchResult {
 
 export function useApi() {
   const { resolveUrl } = useServer();
+  const { sessionToken } = useAuth();
+
+  function authHeaders(json: boolean): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (json) {
+      headers["Content-Type"] = "application/json";
+    }
+    if (sessionToken.value) {
+      headers.Authorization = `Bearer ${sessionToken.value}`;
+    }
+    return headers;
+  }
 
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
+    const isJson = typeof init?.body === "string";
     const res = await fetch(resolveUrl(path), {
-      headers: init?.body && typeof init.body === "string" ? { "Content-Type": "application/json" } : undefined,
+      headers: authHeaders(isJson),
       ...init
     });
 
@@ -47,7 +61,7 @@ export function useApi() {
       const form = new FormData();
       form.append("groupId", groupId);
       files.forEach(file => form.append("files", file));
-      const res = await fetch(resolveUrl("/api/memes"), { method: "POST", body: form });
+      const res = await fetch(resolveUrl("/api/memes"), { method: "POST", headers: authHeaders(false), body: form });
       if (!res.ok) {
         let message = `请求失败 (${res.status})`;
         try {

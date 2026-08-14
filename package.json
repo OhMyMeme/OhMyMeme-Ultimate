@@ -5,7 +5,7 @@
   "description": "OhMyMeme-Ultimate monorepo (Web Nuxt + Desktop Tauri)",
   "workspaces": [
     "nuxt-app",
-    "tarui-app"
+    "tauri-app"
   ],
   "scripts": {
     "dev": "turbo run dev",

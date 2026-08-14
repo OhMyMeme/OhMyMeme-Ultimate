@@ -12,5 +12,6 @@ export default defineEventHandler(async (event) => {
   }
 
   await group.deleteOne()
+  broadcastRealtime('groups-changed')
   return { ok: true }
 })

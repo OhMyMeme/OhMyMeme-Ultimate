@@ -13,10 +13,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: '分组已存在' })
   }
 
-  const group = await GroupSchema.findByIdAndUpdate(id, { name }, { new: true }).lean()
+  const group = await GroupSchema.findByIdAndUpdate(id, { name }, { returnDocument: 'after' }).lean()
   if (!group) {
     throw createError({ statusCode: 404, statusMessage: '分组不存在' })
   }
 
+  broadcastRealtime('groups-changed')
   return toGroup(group, await getGroupCount(id))
 })

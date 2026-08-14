@@ -3,15 +3,17 @@ import { computed } from "vue";
 import { useRouter } from "vue-router";
 import type { MemeGroup } from "../types";
 import { useServer } from "../composables/useServer";
+import { useAuth } from "../composables/useAuth";
 
 const props = defineProps<{
   group: MemeGroup
 }>();
 
 const { resolveUrl } = useServer();
+const { authorizeUrl } = useAuth();
 const router = useRouter();
 
-const covers = computed(() => props.group.covers.slice(0, 4).map(url => resolveUrl(url)));
+const covers = computed(() => props.group.covers.slice(0, 4).map(url => authorizeUrl(resolveUrl(url))));
 
 function open() {
   router.push(`/memes/${props.group.id}`);

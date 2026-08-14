@@ -8,7 +8,7 @@ function formatStorage(bytes: number): string {
 }
 
 export async function useOverview() {
-  const overview = useAsyncData('overview', () => $fetch<{
+  const overview = useAsyncData('overview', () => useRequestFetch()<{
     memeCount: number
     groupCount: number
     storageBytes: number

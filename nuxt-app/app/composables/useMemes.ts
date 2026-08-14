@@ -1,7 +1,7 @@
 import type { Meme, MemeGroup } from '~/types'
 
 export async function useMemes() {
-  const groups = useAsyncData<MemeGroup[]>('meme-groups', () => $fetch('/api/groups'))
+  const groups = useAsyncData<MemeGroup[]>('meme-groups', () => useRequestFetch()('/api/groups'))
 
   await groups
 

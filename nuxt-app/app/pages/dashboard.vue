@@ -7,6 +7,7 @@ definePageMeta({ middleware: 'auth' })
     <template #header>
       <UDashboardNavbar title="总览" :ui="{ right: 'gap-3' }">
         <template #leading>
+          <UDashboardSidebarToggle />
           <UDashboardSidebarCollapse />
         </template>
 

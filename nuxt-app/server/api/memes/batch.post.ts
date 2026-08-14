@@ -15,6 +15,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const result = await MemeSchema.updateMany({ _id: { $in: ids } }, { $set: { groupId } })
+    broadcastRealtime('memes-changed', { groupId: String(groupId) })
     return { moved: result.modifiedCount }
   }
 
@@ -22,6 +23,7 @@ export default defineEventHandler(async (event) => {
     const memes = await MemeSchema.find({ _id: { $in: ids } }).select('storageKey').lean()
     const result = await MemeSchema.deleteMany({ _id: { $in: ids } })
     await Promise.allSettled(memes.map(meme => storage.remove(meme.storageKey)))
+    broadcastRealtime('memes-changed')
     return { deleted: result.deletedCount }
   }
 

@@ -7,6 +7,7 @@ export default defineEventHandler(async (event) => {
   }
 
   await storage.remove(doc.storageKey)
+  broadcastRealtime('memes-changed', { groupId: String(doc.groupId) })
 
   return { ok: true }
 })

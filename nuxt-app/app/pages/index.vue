@@ -1,6 +1,10 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'auth' })
+
 const { login, isAuthenticated } = useAuth()
+const toast = useToast()
+
+const token = ref('')
 const loading = ref(false)
 
 if (isAuthenticated.value) {
@@ -9,14 +13,24 @@ if (isAuthenticated.value) {
 
 async function handleLogin() {
   loading.value = true
-  login()
-  await navigateTo('/dashboard')
+  try {
+    await login(token.value)
+    await navigateTo('/dashboard')
+  } catch (error) {
+    toast.add({
+      title: '登录失败',
+      description: getErrorMessage(error, '访问密钥不正确'),
+      color: 'error'
+    })
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
 <template>
   <div class="flex min-h-dvh items-center justify-center bg-elevated/50 p-4">
-    <div class="w-full max-w-sm">
+    <div class="w-full max-w-md">
       <UCard class="text-center">
         <template #header>
           <div class="flex flex-col items-center gap-4">
@@ -34,18 +48,35 @@ async function handleLogin() {
           </div>
         </template>
 
-        <template #footer>
+        <form class="flex flex-col gap-4" @submit.prevent="handleLogin">
+          <UFormField
+            label="访问密钥"
+            hint="启动服务时配置的 NUXT_ACCESS_TOKEN"
+            :ui="{ label: 'shrink-0 whitespace-nowrap' }"
+          >
+            <UInput
+              v-model="token"
+              type="password"
+              icon="i-lucide-key-round"
+              size="xl"
+              class="w-full"
+              placeholder="请输入访问密钥"
+              autocomplete="current-password"
+              autofocus
+            />
+          </UFormField>
+
           <UButton
-            label="进入管理面板"
+            type="submit"
+            label="登录"
             color="primary"
-            size="lg"
+            size="xl"
             block
             :loading="loading"
-            icon="i-lucide-arrow-right"
+            icon="i-lucide-log-in"
             trailing
-            @click="handleLogin"
           />
-        </template>
+        </form>
       </UCard>
     </div>
   </div>

@@ -1,17 +1,16 @@
 export function useAuth() {
-  const token = useCookie('ohmymeme_token', {
-    maxAge: 60 * 60 * 24 * 7
-  })
+  const { loggedIn, fetch: fetchSession, clear } = useUserSession()
 
-  const isAuthenticated = computed(() => Boolean(token.value))
+  const isAuthenticated = computed(() => loggedIn.value)
 
-  function login() {
-    token.value = String(Date.now())
+  async function login(token: string) {
+    await $fetch('/api/auth/login', { method: 'POST', body: { token } })
+    await fetchSession()
   }
 
-  function logout() {
-    token.value = null
-    navigateTo('/')
+  async function logout() {
+    await clear()
+    await navigateTo('/')
   }
 
   return { isAuthenticated, login, logout }

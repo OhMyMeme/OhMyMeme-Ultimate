@@ -47,6 +47,7 @@ export default defineEventHandler(async (event) => {
         size: stored.size
       }))
     }
+    broadcastRealtime('memes-changed', { groupId: String(groupId) })
     return memes.map(toMeme)
   } catch (error) {
     await Promise.allSettled(savedKeys.map(key => storage.remove(key)))

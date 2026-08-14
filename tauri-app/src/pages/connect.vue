@@ -6,46 +6,32 @@ meta:
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useServer } from "../composables/useServer";
+import { useAuth } from "../composables/useAuth";
 
 const router = useRouter();
 const toast = useToast();
 const { serverUrl, normalizeUrl } = useServer();
+const { login } = useAuth();
 
 const url = ref(serverUrl.value || "");
+const accessToken = ref("");
 const testing = ref(false);
-
-async function testConnection(value: string): Promise<boolean> {
-  const base = normalizeUrl(value);
-  if (!base) {
-    return false;
-  }
-  try {
-    const res = await fetch(`${base}/api/overview`, {
-      signal: AbortSignal.timeout(5000)
-    });
-    if (!res.ok) {
-      return false;
-    }
-    const data = await res.json();
-    return typeof data?.memeCount === "number" && typeof data?.groupCount === "number";
-  } catch {
-    return false;
-  }
-}
 
 async function connect() {
   testing.value = true;
   try {
-    const ok = await testConnection(url.value);
-    if (!ok) {
-      toast.add({ title: "无法连接服务器", description: "请确认地址格式正确（含 http:// 或 https://）且服务端已启动", color: "error" });
+    const base = normalizeUrl(url.value);
+    if (!base) {
+      toast.add({ title: "连接失败", description: "请填写有效的服务器地址", color: "error" });
       return;
     }
-    serverUrl.value = normalizeUrl(url.value);
+    serverUrl.value = base;
+    await login(accessToken.value);
     toast.add({ title: "连接成功", color: "success" });
     router.push("/dashboard");
-  } catch {
-    toast.add({ title: "无法连接服务器", description: "请检查地址是否正确、服务端是否已启动", color: "error" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "请检查地址与访问密钥是否正确";
+    toast.add({ title: "连接失败", description: message, color: "error" });
   } finally {
     testing.value = false;
   }
@@ -79,6 +65,17 @@ async function connect() {
             size="lg"
             class="w-full"
             placeholder="https://your-server.example.com"
+          />
+        </UFormField>
+
+        <UFormField label="访问密钥" hint="输入服务端启动时配置的 NUXT_ACCESS_TOKEN">
+          <UInput
+            v-model="accessToken"
+            type="password"
+            icon="i-lucide-key-round"
+            size="lg"
+            class="w-full"
+            placeholder="请输入访问密钥"
           />
         </UFormField>
 

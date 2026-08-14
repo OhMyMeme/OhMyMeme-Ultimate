@@ -12,5 +12,6 @@ export default defineEventHandler(async (event) => {
   }
 
   const group = await GroupSchema.create({ name })
+  broadcastRealtime('groups-changed')
   return toGroup(group, 0)
 })

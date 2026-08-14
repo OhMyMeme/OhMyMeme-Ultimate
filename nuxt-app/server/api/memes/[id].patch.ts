@@ -20,10 +20,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: '没有需要更新的字段' })
   }
 
-  const doc = await MemeSchema.findByIdAndUpdate(id, update, { new: true }).lean()
+  const doc = await MemeSchema.findByIdAndUpdate(id, update, { returnDocument: 'after' }).lean()
   if (!doc) {
     throw createError({ statusCode: 404, statusMessage: '表情不存在' })
   }
 
+  broadcastRealtime('memes-changed', { groupId: String(doc.groupId) })
   return toMeme(doc)
 })

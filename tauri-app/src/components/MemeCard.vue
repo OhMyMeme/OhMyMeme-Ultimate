@@ -3,6 +3,7 @@ import { computed } from "vue";
 import type { Meme } from "../types";
 import { useCopyMeme } from "../composables/useCopyMeme";
 import { useServer } from "../composables/useServer";
+import { useAuth } from "../composables/useAuth";
 
 const props = defineProps<{
   meme: Meme
@@ -16,8 +17,9 @@ const emit = defineEmits<{
 
 const { resolveUrl } = useServer()
 const { copy } = useCopyMeme()
+const { authorizeUrl } = useAuth()
 
-const src = computed(() => resolveUrl(props.meme.url))
+const src = computed(() => authorizeUrl(resolveUrl(props.meme.url)))
 
 function onClick() {
   if (props.selectable) {

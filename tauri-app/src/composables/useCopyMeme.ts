@@ -2,8 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Meme } from "../types";
 import { getErrorMessage } from "../utils/error";
 import { useServer } from "./useServer";
+import { useAuth } from "./useAuth";
 
-const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+const isWindowsTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window && /Windows/i.test(navigator.userAgent);
 
 function extensionOf(mimeType: string): string {
   const map: Record<string, string> = {
@@ -18,20 +19,23 @@ function extensionOf(mimeType: string): string {
 export function useCopyMeme() {
   const toast = useToast();
   const { resolveUrl } = useServer();
+  const { sessionToken } = useAuth();
 
   async function copy(meme: Meme) {
     const url = resolveUrl(meme.url);
-    console.log(`[copy] 开始复制: ${meme.name} (${meme.mimeType}) url=${url} isTauri=${isTauri}`);
+    console.log(`[copy] 开始复制: ${meme.name} (${meme.mimeType}) url=${url} isWindowsTauri=${isWindowsTauri}`);
 
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: sessionToken.value ? { Authorization: `Bearer ${sessionToken.value}` } : undefined
+      });
       if (!res.ok) {
         throw new Error(`fetch 失败: ${res.status} ${res.statusText}`);
       }
       const bytes = new Uint8Array(await res.arrayBuffer());
       console.log(`[copy] 已拉取 ${bytes.length} 字节`);
 
-      if (isTauri) {
+      if (isWindowsTauri) {
         const extension = extensionOf(meme.mimeType);
         console.log(`[copy] 走原生剪贴板 CF_HDROP (扩展名 .${extension})`);
         await invoke("copy_file_to_clipboard", { bytes: Array.from(bytes), extension });

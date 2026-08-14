@@ -6,12 +6,14 @@ meta:
 import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useServer } from "../composables/useServer";
+import { useAuth } from "../composables/useAuth";
 
 const router = useRouter();
 const { isConfigured } = useServer();
+const { isAuthenticated } = useAuth();
 
 onMounted(() => {
-  router.replace(isConfigured.value ? "/dashboard" : "/connect");
+  router.replace(isConfigured.value && isAuthenticated.value ? "/dashboard" : "/connect");
 });
 </script>
 

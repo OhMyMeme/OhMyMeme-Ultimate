@@ -26,7 +26,7 @@ watch(pageSize, () => {
 
 const groupMemes = useAsyncData(
   `memes-group-${groupId.value}`,
-  () => $fetch<MemeListResponse>(`/api/memes?group=${groupId.value}&limit=${pageSize.value}&offset=${(page.value - 1) * pageSize.value}`),
+  () => useRequestFetch()<MemeListResponse>(`/api/memes?group=${groupId.value}&limit=${pageSize.value}&offset=${(page.value - 1) * pageSize.value}`),
   { watch: [page, pageSize] }
 )
 
@@ -77,6 +77,7 @@ function exitSelection() {
     <template #header>
       <UDashboardNavbar :title="group?.name ?? '分组'" :ui="{ right: 'gap-3' }">
         <template #leading>
+          <UDashboardSidebarToggle />
           <UDashboardSidebarCollapse />
         </template>
 
@@ -129,7 +130,7 @@ function exitSelection() {
           </p>
         </div>
 
-        <div class="flex items-center justify-between gap-4 pt-2">
+        <div class="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <p class="text-xs text-muted">
             共 {{ total }} 个表情
           </p>
@@ -138,6 +139,9 @@ function exitSelection() {
             v-model:page="page"
             :total="total"
             :items-per-page="pageSize"
+            :sibling-count="isMobile ? 0 : 1"
+            size="xs"
+            class="self-center sm:self-auto"
           />
         </div>
       </div>
