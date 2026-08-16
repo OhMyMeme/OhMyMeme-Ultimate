@@ -26,8 +26,10 @@ OhMyMeme-Ultimate 部署说明
 
 可选配置（.env 内）
 -------------------
-- PORT              监听端口，默认 3000
-- HOST              监听地址，默认 0.0.0.0（局域网可访问）
+- PORT                  监听端口，默认 3000
+- HOST                  监听地址，默认 0.0.0.0（局域网可访问）
+- NUXT_ALLOWED_ORIGINS  跨域白名单（逗号分隔），默认同源 + 桌面端
+- NUXT_STORAGE_LOCAL_DIR 表情文件存储目录，默认 .data/uploads/memes
 
 注意事项
 --------

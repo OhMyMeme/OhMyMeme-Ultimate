@@ -16,6 +16,33 @@ const { login } = useAuth();
 const url = ref(serverUrl.value || "");
 const accessToken = ref("");
 const testing = ref(false);
+const probing = ref(false);
+const reachable = ref<boolean | null>(null);
+
+async function probe() {
+  const base = normalizeUrl(url.value);
+  if (!base) {
+    toast.add({ title: "请先填写服务器地址", color: "error" });
+    return;
+  }
+  probing.value = true;
+  reachable.value = null;
+  try {
+    const res = await fetch(`${base}/api/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000)
+    });
+    reachable.value = res.ok;
+  } catch {
+    reachable.value = false;
+  } finally {
+    probing.value = false;
+    toast.add({
+      title: reachable.value ? "服务器可达" : "无法连接服务器",
+      color: reachable.value ? "success" : "error"
+    });
+  }
+}
 
 async function connect() {
   testing.value = true;
@@ -59,13 +86,31 @@ async function connect() {
 
       <UForm class="flex flex-col gap-4" @submit.prevent="connect">
         <UFormField label="服务器地址" hint="本地调试填 http://localhost:3000">
-          <UInput
-            v-model="url"
-            icon="i-lucide-server"
-            size="lg"
-            class="w-full"
-            placeholder="https://your-server.example.com"
-          />
+          <div class="flex gap-2">
+            <UInput
+              v-model="url"
+              icon="i-lucide-server"
+              size="lg"
+              class="w-full"
+              placeholder="https://your-server.example.com"
+            />
+            <UButton
+              icon="i-lucide-plug-zap"
+              size="lg"
+              color="neutral"
+              variant="outline"
+              :loading="probing"
+              @click="probe"
+            />
+          </div>
+          <p v-if="reachable === true" class="mt-1.5 flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+            <UIcon name="i-lucide-circle-check" class="size-3.5" />
+            服务器可达
+          </p>
+          <p v-else-if="reachable === false" class="mt-1.5 flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+            <UIcon name="i-lucide-circle-x" class="size-3.5" />
+            无法连接，请检查地址或服务是否启动
+          </p>
         </UFormField>
 
         <UFormField label="访问密钥" hint="输入服务端启动时配置的 NUXT_ACCESS_TOKEN">

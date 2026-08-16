@@ -13,6 +13,13 @@ const emit = defineEmits<{
 
 const { copy } = useCopyMeme()
 
+const previewUrl = computed(() => {
+  if (props.meme.mimeType === 'image/gif') {
+    return props.meme.url
+  }
+  return props.meme.thumbUrl || props.meme.url
+})
+
 function onClick() {
   if (props.selectable) {
     emit('toggle-select')
@@ -29,14 +36,14 @@ function onClick() {
     @click="onClick"
   >
     <img
-      :src="meme.url"
+      :src="previewUrl"
       :alt="meme.name"
       loading="lazy"
       class="aspect-square w-full object-cover"
     >
 
     <div class="flex items-center gap-2 p-2">
-      <span class="min-w-0 flex-1 truncate text-xs text-muted">
+      <span class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">
         {{ meme.name }}
       </span>
     </div>

@@ -15,6 +15,19 @@ const router = useRouter();
 
 const covers = computed(() => props.group.covers.slice(0, 4).map(url => authorizeUrl(resolveUrl(url))));
 
+const systemIcon = computed(() => {
+  if (props.group.isFavorites) {
+    return "i-lucide-star";
+  }
+  if (props.group.isRecent) {
+    return "i-lucide-clock";
+  }
+  if (props.group.isUngrouped) {
+    return "i-lucide-inbox";
+  }
+  return null;
+});
+
 function open() {
   router.push(`/memes/${props.group.id}`);
 }
@@ -46,7 +59,8 @@ function open() {
     </div>
 
     <div v-else class="flex aspect-square items-center justify-center">
-      <UIcon name="i-lucide-image-off" class="size-8 text-dimmed" />
+      <UIcon v-if="systemIcon" :name="systemIcon" class="size-8" :class="group.isFavorites ? 'text-warning' : 'text-dimmed'" />
+      <UIcon v-else name="i-lucide-image-off" class="size-8 text-dimmed" />
     </div>
 
     <div class="absolute inset-x-0 bottom-0 bg-black/60 p-3">
@@ -58,7 +72,14 @@ function open() {
       </p>
     </div>
 
-    <div class="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100" @click.stop>
+    <div
+      v-if="systemIcon"
+      class="absolute left-2 top-2 flex size-7 items-center justify-center rounded-full bg-black/50 backdrop-blur"
+    >
+      <UIcon :name="systemIcon" class="size-4" :class="group.isFavorites ? 'text-warning' : 'text-white/80'" />
+    </div>
+
+    <div v-else class="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100" @click.stop>
       <GroupActionsMenu :group="group" />
     </div>
   </div>

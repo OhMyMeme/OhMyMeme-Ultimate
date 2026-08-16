@@ -4,6 +4,12 @@ interface RealtimePeer {
 
 const peers = new Set<RealtimePeer>()
 
+let revision = 0
+
+export function getRealtimeRevision(): number {
+  return revision
+}
+
 export function addRealtimePeer(peer: RealtimePeer) {
   peers.add(peer)
 }
@@ -17,11 +23,16 @@ export function getRealtimePeerCount(): number {
 }
 
 export function broadcastRealtime(type: string, payload?: unknown) {
+  revision++
   if (!peers.size) {
     return
   }
-  const message = JSON.stringify({ type, payload })
+  const message = JSON.stringify({ type, revision, payload })
   for (const peer of peers) {
-    peer.send(message)
+    try {
+      peer.send(message)
+    } catch {
+      removeRealtimePeer(peer)
+    }
   }
 }

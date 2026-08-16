@@ -17,7 +17,7 @@ const moveOpen = ref(false)
 const deleteOpen = ref(false)
 const targetGroupId = ref('')
 
-const groupOptions = computed(() => groups.value.map(group => ({ label: group.name, value: group.id })))
+const groupOptions = computed(() => groups.value.filter(group => !group.isFavorites && !group.isRecent).map(group => ({ label: group.name, value: group.id })))
 
 watch(moveOpen, (value) => {
   if (value) {

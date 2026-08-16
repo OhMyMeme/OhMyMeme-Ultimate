@@ -21,7 +21,7 @@ const { groups } = await useMemes()
     </template>
 
     <template #body>
-      <div v-if="groups.length" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div v-if="groups.length" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
         <GroupCoverCard
           v-for="group in groups"
           :key="group.id"

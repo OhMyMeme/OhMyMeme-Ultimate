@@ -9,8 +9,61 @@ html {
   background-color: #ffffff;
 }
 
+@media (min-width: 1600px) {
+  html {
+    font-size: 17px;
+  }
+}
+
+@media (min-width: 1920px) {
+  html {
+    font-size: 18px;
+  }
+}
+
+@media (min-width: 2560px) {
+  html {
+    font-size: 20px;
+  }
+}
+
+@media (min-width: 3440px) {
+  html {
+    font-size: 22px;
+  }
+}
+
 html.dark {
   background-color: #18181b;
+}
+
+.min-h-svh {
+  min-height: calc(100svh - 2.25rem);
+}
+
+@media (max-width: 1023px) {
+  .desktop-sidebar-collapse {
+    display: flex !important;
+  }
+
+  .desktop-sidebar {
+    display: flex !important;
+    width: 17.5rem !important;
+    min-width: 17.5rem !important;
+  }
+
+  .desktop-sidebar[data-collapsed="true"] {
+    display: none !important;
+  }
+
+  .meme-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .desktop-sidebar-is-collapsed .meme-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
 }
 
 .dark {

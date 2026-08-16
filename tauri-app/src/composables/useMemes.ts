@@ -14,9 +14,15 @@ const _useMemes = () => {
     loading.value = true;
     try {
       groups.value = await api.getGroups();
+    } catch (error) {
+      console.error("[memes] 加载分组失败", error);
     } finally {
       loading.value = false;
     }
+  }
+
+  function bumpRevision() {
+    revision.value++;
   }
 
   function groupById(id: string) {
@@ -43,8 +49,15 @@ const _useMemes = () => {
     revision.value++;
   }
 
-  async function updateMeme(id: string, data: { name?: string, groupId?: string }) {
+  async function updateMeme(id: string, data: { name?: string, groupId?: string, favorite?: boolean }) {
     const meme = await api.updateMeme(id, data);
+    await refresh();
+    revision.value++;
+    return meme;
+  }
+
+  async function toggleFavorite(id: string, favorite: boolean) {
+    const meme = await api.updateMeme(id, { favorite });
     await refresh();
     revision.value++;
     return meme;
@@ -63,26 +76,20 @@ const _useMemes = () => {
     return result;
   }
 
-  async function upload(groupId: string, files: File[]) {
-    const memes = await api.uploadMemes(groupId, files);
-    await refresh();
-    revision.value++;
-    return memes;
-  }
-
   return {
     groups,
     loading,
     revision,
     refresh,
+    bumpRevision,
     groupById,
     createGroup,
     renameGroup,
     deleteGroup,
     updateMeme,
+    toggleFavorite,
     deleteMeme,
-    batchMemes,
-    upload
+    batchMemes
   };
 };
 

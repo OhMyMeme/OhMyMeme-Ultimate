@@ -9,9 +9,9 @@ await memes.refresh();
 <template>
   <UDashboardPanel id="memes">
     <template #header>
-      <UDashboardNavbar title="表情库" :ui="{ right: 'gap-3' }">
+      <UDashboardNavbar title="表情库" :toggle="false" :ui="{ right: 'gap-3' }">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <UDashboardSidebarCollapse class="desktop-sidebar-collapse" />
         </template>
 
         <template #right>
@@ -22,7 +22,7 @@ await memes.refresh();
     </template>
 
     <template #body>
-      <div v-if="groups.length" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div v-if="groups.length" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
         <GroupCoverCard
           v-for="group in groups"
           :key="group.id"

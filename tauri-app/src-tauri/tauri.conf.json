@@ -13,10 +13,11 @@
     "windows": [
       {
         "title": "OhMyMeme Desktop",
-        "width": 1280,
-        "height": 800,
+        "width": 960,
+        "height": 600,
         "minWidth": 960,
-        "minHeight": 600
+        "minHeight": 600,
+        "decorations": false
       }
     ],
     "security": {

@@ -12,12 +12,21 @@ function formatStorage(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-const overview = await getOverview();
+let overview = { memeCount: 0, favoriteCount: 0, groupCount: 0, storageBytes: 0 };
+try {
+  overview = await getOverview();
+} catch (error) {
+  console.error("[dashboard] 加载总览失败", error);
+}
 
 const stats = computed<Stat[]>(() => [{
   title: "表情总数",
   icon: "i-lucide-image",
   value: overview.memeCount
+}, {
+  title: "收藏数",
+  icon: "i-lucide-star",
+  value: overview.favoriteCount
 }, {
   title: "分组数",
   icon: "i-lucide-folder",
@@ -32,15 +41,15 @@ const stats = computed<Stat[]>(() => [{
 <template>
   <UDashboardPanel id="home">
     <template #header>
-      <UDashboardNavbar title="总览" :ui="{ right: 'gap-3' }">
+      <UDashboardNavbar title="总览" :toggle="false" :ui="{ right: 'gap-3' }">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <UDashboardSidebarCollapse class="desktop-sidebar-collapse" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <UPageGrid class="lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-px">
+      <UPageGrid class="lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-px">
         <UPageCard
           v-for="(stat, index) in stats"
           :key="index"

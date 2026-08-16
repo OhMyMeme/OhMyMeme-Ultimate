@@ -12,7 +12,11 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AboutCard: typeof import('./src/components/settings/AboutCard.vue')['default']
+    AccountCard: typeof import('./src/components/settings/AccountCard.vue')['default']
+    AppearanceCard: typeof import('./src/components/settings/AppearanceCard.vue')['default']
     BatchActionBar: typeof import('./src/components/BatchActionBar.vue')['default']
+    BehaviorCard: typeof import('./src/components/settings/BehaviorCard.vue')['default']
     CreateGroupButton: typeof import('./src/components/CreateGroupButton.vue')['default']
     GroupActionsMenu: typeof import('./src/components/GroupActionsMenu.vue')['default']
     GroupCoverCard: typeof import('./src/components/GroupCoverCard.vue')['default']
@@ -21,7 +25,11 @@ declare module 'vue' {
     MemeCard: typeof import('./src/components/MemeCard.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    ServerCard: typeof import('./src/components/settings/ServerCard.vue')['default']
+    ShortcutCard: typeof import('./src/components/settings/ShortcutCard.vue')['default']
+    TitleBar: typeof import('./src/components/TitleBar.vue')['default']
     UApp: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/App.vue')['default']
+    UBadge: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Badge.vue')['default']
     UButton: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Button.vue')['default']
     UCard: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Card.vue')['default']
     UDashboardGroup: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/DashboardGroup.vue')['default']
@@ -38,17 +46,21 @@ declare module 'vue' {
     UNavigationMenu: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/NavigationMenu.vue')['default']
     UPageCard: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/PageCard.vue')['default']
     UPageGrid: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/PageGrid.vue')['default']
-    UPagination: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Pagination.vue')['default']
     UploadMemeButton: typeof import('./src/components/UploadMemeButton.vue')['default']
     UploadMemeModal: typeof import('./src/components/UploadMemeModal.vue')['default']
     UProgress: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Progress.vue')['default']
     USelectMenu: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/SelectMenu.vue')['default']
+    USwitch: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Switch.vue')['default']
   }
 }
 
 // For TSX support
 declare global {
+  const AboutCard: typeof import('./src/components/settings/AboutCard.vue')['default']
+  const AccountCard: typeof import('./src/components/settings/AccountCard.vue')['default']
+  const AppearanceCard: typeof import('./src/components/settings/AppearanceCard.vue')['default']
   const BatchActionBar: typeof import('./src/components/BatchActionBar.vue')['default']
+  const BehaviorCard: typeof import('./src/components/settings/BehaviorCard.vue')['default']
   const CreateGroupButton: typeof import('./src/components/CreateGroupButton.vue')['default']
   const GroupActionsMenu: typeof import('./src/components/GroupActionsMenu.vue')['default']
   const GroupCoverCard: typeof import('./src/components/GroupCoverCard.vue')['default']
@@ -57,7 +69,11 @@ declare global {
   const MemeCard: typeof import('./src/components/MemeCard.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
+  const ServerCard: typeof import('./src/components/settings/ServerCard.vue')['default']
+  const ShortcutCard: typeof import('./src/components/settings/ShortcutCard.vue')['default']
+  const TitleBar: typeof import('./src/components/TitleBar.vue')['default']
   const UApp: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/App.vue')['default']
+  const UBadge: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Badge.vue')['default']
   const UButton: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Button.vue')['default']
   const UCard: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Card.vue')['default']
   const UDashboardGroup: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/DashboardGroup.vue')['default']
@@ -74,9 +90,9 @@ declare global {
   const UNavigationMenu: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/NavigationMenu.vue')['default']
   const UPageCard: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/PageCard.vue')['default']
   const UPageGrid: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/PageGrid.vue')['default']
-  const UPagination: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Pagination.vue')['default']
   const UploadMemeButton: typeof import('./src/components/UploadMemeButton.vue')['default']
   const UploadMemeModal: typeof import('./src/components/UploadMemeModal.vue')['default']
   const UProgress: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Progress.vue')['default']
   const USelectMenu: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/SelectMenu.vue')['default']
+  const USwitch: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Switch.vue')['default']
 }

@@ -14,6 +14,8 @@ export interface MemeDto {
   mimeType: string
   size: number
   url: string
+  thumbUrl: string
+  favorite: boolean
   createdAt?: Date
 }
 
@@ -26,6 +28,8 @@ export function toMeme(doc: MemeLean): MemeDto {
     mimeType: doc.mimeType,
     size: doc.size,
     url: `/api/memes/${doc._id}/file`,
+    thumbUrl: `/api/memes/${doc._id}/thumb`,
+    favorite: Boolean(doc.favorite),
     createdAt: doc.createdAt
   }
 }

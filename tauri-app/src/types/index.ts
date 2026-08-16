@@ -7,6 +7,9 @@ export interface Stat {
 export interface MemeGroup {
   id: string
   name: string
+  isFavorites: boolean
+  isRecent: boolean
+  isUngrouped: boolean
   count: number
   covers: string[]
 }
@@ -19,6 +22,8 @@ export interface Meme {
   mimeType: string
   size: number
   url: string
+  thumbUrl?: string
+  favorite: boolean
   createdAt?: string
 }
 
@@ -31,6 +36,7 @@ export interface MemeListResponse {
 
 export interface Overview {
   memeCount: number
+  favoriteCount: number
   groupCount: number
   storageBytes: number
 }

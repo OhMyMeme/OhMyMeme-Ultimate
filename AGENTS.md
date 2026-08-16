@@ -10,6 +10,10 @@
 
 核心目标：在保留原版（导入 / 搜索 / 标签 / 收藏 / 分组 / 一键复制 / 同步）核心能力的基础上，借助现代 Web 技术栈实现更丰富的交互、更强的性能和更优雅的工程化。
 
+## 当前开发重心（重要）
+
+> **Web（Nuxt）前端开发已暂缓**：当前仅开发 Nuxt **后端**（`nuxt-app/server/`，Nitro API / WS / 数据模型）与 **Tauri 桌面端**（`tauri-app/`）。Web 页面访问默认关闭（`NUXT_WEB_ENABLED=false`，见下「配置」），桌面端走 HTTP 复用后端 API。暂缓期间：不改动 `nuxt-app/app/` 的前端页面/组件/composables（除非明确要求）；新增功能一律以服务端 API 形式提供，并同步实现到桌面端。
+
 ## 产品形态：类微信/QQ 表情包管理
 
 界面与交互参考微信/QQ 的表情包面板：网格展示表情、点击即用（复制）、分组/标签快速筛选、收藏夹、最近使用。核心追求是**即时反馈**——所有操作即刻生效、即刻可视化。
@@ -58,9 +62,11 @@ turbo.json               # 任务编排（dev/build/lint/typecheck 等）
 | 代码规范 | `@nuxt/eslint@^1.17.0` | flat config，基于 `./nuxt-app/.nuxt/eslint.config.mjs` |
 | 数据库 | MongoDB（`nuxt-mongoose@^1`，基于 Mongoose 9） | Nuxt 模块自动连接（懒处理，连接失败仅报错不崩溃），连接串 `NUXT_MONGOOSE_URI`；模型放 `nuxt-app/server/models/`（`defineMongooseModel` 定义并自动导入） |
 | 鉴权 | [`nuxt-auth-utils@^0.5.30`](https://nuxt.com/modules/auth-utils) | 密封 Cookie 会话（`NUXT_SESSION_PASSWORD`）+ 自签名短期会话令牌（HMAC，7 天） |
-| 实时同步 | WebSocket（Nitro `nitro.experimental.websocket`） | `server/routes/ws.ts` 定义 `/ws` 端点，`server/utils/realtime.ts` 提供 `broadcastRealtime`，变更即广播、多端即时刷新 |
+| 实时同步 | WebSocket（Nitro `nitro.experimental.websocket`） | `server/routes/ws.ts` 定义 `/ws` 端点（含服务端心跳 + 连接时下发 `sync` 版本），`server/utils/realtime.ts` 提供 `broadcastRealtime`（携带自增 `revision`），变更即广播、多端即时刷新、断线重连自动补差 |
+| 图片处理 | [sharp](https://sharp.pixelplumbing.com) | 上传即生成 256px WebP 缩略图（`server/utils/storage.ts` 的 `generateThumbnail`，GIF 取首帧），`nitro.externals.external: ['sharp']` 需保留避免打包失败 |
 | 存储后端 | S3 + 本地（暂时仅这两种） | 服务端 `nuxt-app/server/utils` 统一封装，新增存储时只扩展该层 |
-| 桌面壳 | Tauri 2 + Vue 3 + Vite | `tauri-app/`，走 HTTP 复用 `nuxt-app` 的 API |
+| 限流 / CORS | 自研内存限流 + CORS 白名单 | `server/utils/rate-limit.ts`（登录 5 次/分、受保护接口 600 次/分，按 IP）、`server/utils/cors.ts`（`NUXT_ALLOWED_ORIGINS` 白名单，内置桌面端来源） |
+| 桌面壳 | Tauri 2 + Vue 3 + Vite | `tauri-app/`，走 HTTP 复用 `nuxt-app` 的 API；`tray-icon` feature + `tauri-plugin-global-shortcut`（系统托盘 + 全局快捷键，默认 `Ctrl+Alt+N`，可在设置中自定义） |
 
 ## 常用命令
 
@@ -76,6 +82,7 @@ npm run lint           # ESLint 检查（改代码后必须运行，两个 works
 npm run typecheck      # TS 类型检查（vue-tsc）
 npm run build          # Web 生产构建（ohmymeme-web）
 npm run build:desktop  # 桌面端生产构建（ohmymeme-desktop）
+npm run reset:dev      # 一键清除开发数据（node nuxt-app/scripts/reset-dev.mjs：删 memes/groups 集合 + 清空上传文件夹；NODE_ENV=production 或非本地库会拒绝执行）
 
 # 也可在子目录内运行各自的脚本（等同）
 cd nuxt-app && npm run dev
@@ -122,7 +129,7 @@ nuxt-app/
 
 ## 配置
 
-- **`nuxt-app/nuxt.config.ts`**：模块、兼容性、运行时配置。当前已启用 `@nuxt/ui`、`@nuxt/eslint`、`@vueuse/nuxt`、`nuxt-mongoose`、`nuxt-auth-utils`；`@nuxt/icon`、`@nuxt/fonts`、`@nuxtjs/color-mode` 由 Nuxt UI 自动注册（无需显式加入 `modules`）。`runtimeConfig.accessToken` 承载访问密钥（由 `NUXT_ACCESS_TOKEN` 注入）。表情文件存储通过 `nitro.storage.memes` 挂载（`unstorage` 的 `fs` driver，目录由 `NUXT_STORAGE_LOCAL_DIR` 配置，默认 `.data/uploads/memes`），切换 S3 只需改 driver；`nitro.experimental.websocket` 已启用以支持 `/ws` 实时推送。
+- **`nuxt-app/nuxt.config.ts`**：模块、兼容性、运行时配置。当前已启用 `@nuxt/ui`、`@nuxt/eslint`、`@vueuse/nuxt`、`nuxt-mongoose`、`nuxt-auth-utils`；`@nuxt/icon`、`@nuxt/fonts`、`@nuxtjs/color-mode` 由 Nuxt UI 自动注册（无需显式加入 `modules`）。`runtimeConfig.accessToken` 承载访问密钥（由 `NUXT_ACCESS_TOKEN` 注入）、`runtimeConfig.allowedOrigins` 承载 CORS 白名单（由 `NUXT_ALLOWED_ORIGINS` 注入）、`runtimeConfig.webEnabled` 承载 Web 前端开关（由 `NUXT_WEB_ENABLED` 注入，**默认 false 即禁止 Web 页面访问**：`server/middleware/web-disabled.ts` 拦截除 `/api/**`、`/ws`、`/_nuxt/**`、`/_ipx/**` 外的页面请求并返回 403 提示页，API 与 WebSocket 不受影响，桌面端正常使用；开发 Web 前端时临时设 `NUXT_WEB_ENABLED=true` 开启）。表情文件存储通过 `nitro.storage.memes` 挂载（`unstorage` 的 `fs` driver，目录由 `NUXT_STORAGE_LOCAL_DIR` 配置，默认 `.data/uploads/memes`），切换 S3 只需改 driver；`nitro.experimental.websocket` 已启用以支持 `/ws` 实时推送；`nitro.externals.external: ['sharp']` 避免原生模块打包失败。
 - **`nuxt-app/.env`**：环境变量（本地配置），已包含 `NUXT_MONGOOSE_URI`、`NUXT_ACCESS_TOKEN`、`NUXT_SESSION_PASSWORD`。**严禁将密钥/密码写入代码或提交到仓库。**
 - **`nuxt-app/eslint.config.mjs`**：基于 Nuxt 官方 flat config，继承 `.nuxt/eslint.config.mjs`。
 - **根 `turbo.json`**：任务编排。`dev` / `dev:web` 标记为 `persistent`（不缓存、不退出），`build` 输出 `.output` / `dist`。新增任务时在此配置 `cache` / `outputs`。
@@ -147,7 +154,7 @@ nuxt-app/
 - **解决问题先找现成方案**：遇到新需求（复制图片/GIF、图片处理、剪贴板等）时，**先搜索 npm 包 / Nuxt 模块**，确认无现成可用方案后再自研；若调研发现是平台/浏览器能力限制（如浏览器无法原生写入 `image/gif`），在自研实现的同时在代码或提交说明中注明结论。
 - **路由中间件**：页面级守卫放 `app/middleware/`，通过文件名即路由中间件名，在页面中 `definePageMeta({ middleware: [...] })` 启用。
 - **服务端中间件**：请求级处理（日志、鉴权、请求预处理）放 `server/middleware/`。
-- **鉴权**：基于 [`nuxt-auth-utils`](https://nuxt.com/modules/auth-utils) 的密封 Cookie 会话 + 自签名的短期会话令牌。用户启动服务时通过 `NUXT_ACCESS_TOKEN`（访问密钥，登录时输入）与 `NUXT_SESSION_PASSWORD`（会话签名密钥，至少 32 字符）配置；`server/api/auth/login.post.ts` 校验密钥后 `setUserSession`（Web 端 Cookie）并返回一个 `createSessionToken()` 生成的**短期会话令牌**（HMAC 签名、7 天过期，见 `server/utils/auth.ts`）。`server/middleware/auth.ts` 与 `server/routes/ws.ts` 保护除 `/api/auth/**`、`/api/_auth/**` 外的所有 `/api/**`，只接受**会话令牌**（`Authorization: Bearer <会话令牌>` / `?token=<会话令牌>`）或密封 Cookie；**原始访问密钥只在登录接口被接受，不再作为 Bearer/查询参数直接使用**（避免主密钥随每次请求外泄）。前端登录态统一用 `app/composables/useAuth.ts`（基于 `useUserSession`），`login(token)` / `logout` / `isAuthenticated`；受保护页面启用 `auth` 中间件。登录页为 `/`（`auth` 布局），登录后跳 `/dashboard`；`/dashboard`（总览）与 `/memes`（表情库）均需登录。桌面端鉴权见 `tauri-app/src/composables/useAuth.ts`（`login()` 用访问密钥换取会话令牌存 `useStorage`，`useApi` 带 `Authorization` 头，图片 URL 与 WS 追加 `?token=` 会话令牌）。
+- **鉴权**：基于 [`nuxt-auth-utils`](https://nuxt.com/modules/auth-utils) 的密封 Cookie 会话 + 自签名的短期会话令牌。用户启动服务时通过 `NUXT_ACCESS_TOKEN`（访问密钥，登录时输入）与 `NUXT_SESSION_PASSWORD`（会话签名密钥，至少 32 字符）配置；`server/api/auth/login.post.ts` 校验密钥后 `setUserSession`（Web 端 Cookie）并返回一个 `createSessionToken()` 生成的**短期会话令牌**（HMAC 签名、7 天过期，见 `server/utils/auth.ts`）。`server/middleware/auth.ts` 与 `server/routes/ws.ts` 保护除 `/api/auth/**`、`/api/_auth/**`、`/api/health` 外的所有 `/api/**`，只接受**会话令牌**（`Authorization: Bearer <会话令牌>` / `?token=<会话令牌>`）或密封 Cookie；**原始访问密钥只在登录接口被接受，不再作为 Bearer/查询参数直接使用**（避免主密钥随每次请求外泄）。该中间件同时承担 **CORS 白名单**（`applyCors`，`server/utils/cors.ts`）与**内存限流**（登录 5 次/分、受保护接口 600 次/分，`server/utils/rate-limit.ts`）。前端登录态统一用 `app/composables/useAuth.ts`（基于 `useUserSession`），`login(token)` / `logout` / `isAuthenticated`；受保护页面启用 `auth` 中间件。登录页为 `/`（`auth` 布局），登录后跳 `/dashboard`；`/dashboard`（总览）与 `/memes`（表情库）均需登录。桌面端鉴权见 `tauri-app/src/composables/useAuth.ts`（`login()` 用访问密钥换取会话令牌存 `useStorage`，`useApi` 带 `Authorization` 头，图片 URL 与 WS 追加 `?token=` 会话令牌）。**服务端错误统一用 `createError({ statusCode, message })`（不再使用 `statusMessage`，h3 已弃用并会告警）；前端错误解析统一读 `data.message`（`app/utils/error.ts` 的 `getErrorMessage`）。**
 
 ## 代码风格
 
@@ -161,7 +168,7 @@ nuxt-app/
 
 原版桌面端能力，将以更高级的形态在 Web / 桌面双端实现。**所有业务能力以服务端 API 为核心契约**（见后续 `API.md`），前端与桌面客户端通过 HTTP/WebSocket 调用：
 
-- 表情包：导入 / 搜索 / 标签（多标签交集筛选）/ 收藏 / 自定义分组
+- 表情包：导入 / 搜索 / 标签（多标签交集筛选）/ 收藏 / 最近使用（上限 50）/ 未分组 / 自定义分组
 - 一键复制：点击表情包复制到剪贴板（GIF 保留动画；Web 端走浏览器剪贴板，桌面端走原生剪贴板）
 - 图片处理：WebP 缩放 / 转 GIF / 隐写还原等复制处理模式
 - 存储：云端（S3）为主、本地文件系统为辅，统一存储抽象，后续再扩展其他后端
@@ -172,10 +179,28 @@ nuxt-app/
 浏览器硬限制：`navigator.clipboard.write()` 的 `ClipboardItem` **无法写入 `image/gif`**（Chrome 仅支持 `text/plain` / `text/html` / `image/png` 及少量新类型），且 QQ/微信等 Windows 原生客户端粘贴时只读位图格式（`CF_DIB` / `CF_BITMAP` / PNG）或文件拖放（`CF_HDROP`），**不解析 `text/html`**。因此：
 
 - **Web 端**（`nuxt-app/app/composables/useCopyMeme.ts`）：GIF 采用「`text/html`（内嵌 `data:image/gif` 保动画）+ `image/png`（首帧静态回退）」双表示写入。结果是——粘贴进富文本/网页/Word 等 HTML 目标为**动图**，粘贴进 QQ/微信原生客户端为**静态图**（这是 Web 端可达到的上限）。
-- **桌面端**（已实现）：`tauri-app/src/composables/useCopyMeme.ts` 拉取 `GET /api/memes/:id/file`（`cache-control: immutable`）字节后，**所有图片（GIF/PNG/JPEG/WebP）统一**经自定义 Tauri 命令 `copy_file_to_clipboard`（`tauri-app/src-tauri/src/lib.rs`）把字节按 `mimeType` 写入对应扩展名的临时文件，并以 `CF_HDROP`（文件拖放）写入 Windows 剪贴板（依赖 `windows` crate 的 `OpenClipboard`/`SetClipboardData`/`GlobalAlloc`，仅 Windows 生效），QQ/微信粘贴即得图片（GIF 保留动画）。非 Tauri 环境回退浏览器 `navigator.clipboard`。
+- **桌面端**（已实现）：`tauri-app/src/composables/useCopyMeme.ts` 拉取 `GET /api/memes/:id/file`（`cache-control: immutable`）字节后，**所有图片（GIF/PNG/JPEG/WebP）统一**经自定义 Tauri 命令 `copy_file_to_clipboard`（`tauri-app/src-tauri/src/lib.rs`）把字节按 `mimeType` 写入对应扩展名的临时文件，并以 `CF_HDROP`（文件拖放）写入 Windows 剪贴板（依赖 `windows` crate 的 `OpenClipboard`/`SetClipboardData`/`GlobalAlloc`，仅 Windows 生效），QQ/微信粘贴即得图片（GIF 保留动画）。非 Tauri 环境回退浏览器 `navigator.clipboard`。**复制成功后**前端调用 `POST /api/memes/:id/use` 记录最近使用（桌面端 `useCopyMeme` 已实现；Web 前端暂缓，未接入）。
 
-> **当前进展**：表情存储暂定为**仅本地**。存储抽象在 `nuxt-app/server/utils/storage.ts`（`save`/`read`/`remove`，基于 Nitro 自带的 `unstorage`，`nitro.storage.memes` 挂载，默认目录 `.data/uploads/memes`，由 `NUXT_STORAGE_LOCAL_DIR` 配置），扩展 S3 时只需改 `nuxt-app/nuxt.config.ts` 的 driver。分组为独立实体 `nuxt-app/server/models/group.schema.ts`（`GroupRecord`，中文名原生支持），表情 `nuxt-app/server/models/meme.schema.ts`（`MemeRecord`）以 `groupId: ObjectId` 引用分组。现有 API：`GET/POST /api/groups`（`GET` 返回每组的 `count` 与 `covers` 封面图 URL，聚合取每类最新 4 张）、`PATCH/DELETE /api/groups/:id`（分组增删改）、`GET /api/memes`（按 `group` 分组过滤 + `limit`/`offset` 分页）、`POST /api/memes`（multipart 多文件上传，`groupId`）、`PATCH/DELETE /api/memes/:id`（改名/移动/删除）、`GET /api/memes/:id/file`（流式返回文件，`cache-control: immutable`）、`GET /api/overview`（总数/分组数/存储）。前端已接入 API：`useMemes()` 拉取分组并提供分组/表情的增删改（`refreshNuxtData` 刷新），分组详情页为页码式分页（48/页）；表情卡片用原生 `<img>` 直连文件端点（避免 IPX 二次代理、保留 GIF 动画）。ObjectId 校验统一走 `nuxt-app/server/utils/validate.ts` 的 `isValidId`/`requireValidId`（`mongoose.isValidObjectId`）；前端错误解析统一走 `app/utils/error.ts` 的 `getErrorMessage` + `useAsyncAction`。
+> **当前进展**：表情存储暂定为**仅本地**。存储抽象在 `nuxt-app/server/utils/storage.ts`（`save`/`saveThumb`/`read`/`remove` + `sniffMimeType` 魔数校验 + `generateThumbnail` 缩略图，基于 Nitro 自带的 `unstorage`，`nitro.storage.memes` 挂载，默认目录 `.data/uploads/memes`，由 `NUXT_STORAGE_LOCAL_DIR` 配置），扩展 S3 时只需改 `nuxt-app/nuxt.config.ts` 的 driver。分组为独立实体 `nuxt-app/server/models/group.schema.ts`（`GroupRecord`，中文名原生支持，含三个系统分组标记 `isFavorites` / `isRecent` / `isUngrouped`），表情 `nuxt-app/server/models/meme.schema.ts`（`MemeRecord`）以 `groupId: ObjectId` 引用分组，含 `thumbKey`（256px WebP 缩略图存储键）、`favorite`（收藏标记，`{ favorite: 1, createdAt: -1 }` 索引）与 `usedAt`（最近使用时间，`{ usedAt: -1 }` 索引）。
+>
+> **系统分组（收藏 / 最近使用 / 未分组）**：`ensureSystemGroups()` 惰性 upsert 三个系统分组（名字「收藏」「最近使用」「未分组」均为系统保留名，创建同名分组返回 409），`GET /api/groups` 恒按 **收藏 → 最近使用 → 未分组 → 自定义** 顺序返回，且 `count`/`covers` 各自聚合：
+> - **收藏**（`isFavorites`）：聚合 `favorite: true` 的表情；表情收藏后仍留在原分组（`favorite` 布尔），`GET /api/memes?group=<收藏分组id>` 返回全部已收藏表情。
+> - **最近使用**（`isRecent`）：聚合 `usedAt` 非空的表情，按 `usedAt` 倒序、**上限 50**（`RECENT_LIMIT`，`count` 亦封顶 50、封面取最近 4 张）；复制表情后前端调用 `POST /api/memes/:id/use` 写入 `usedAt` 并广播 `memes-changed`。
+> - **未分组**（`isUngrouped`）：真实 bucket，上传未携带 `groupId` 时自动落入（`getUngroupedGroup()`），可作移动目标。
+>
+> **不可上传/移动到收藏与最近使用**（`POST /api/memes`、`PATCH /api/memes/:id`、`POST /api/memes/batch` 校验 `isFavorites`/`isRecent` 拒绝；未分组可上传可移动）；**三个系统分组均不可改名/删除**（`PATCH/DELETE /api/groups/:id` 返回 403）。
+>
+> 现有 API：`GET/POST /api/groups`（`GET` 返回每组的 `count` 与 `covers` 封面图 URL，聚合取每类最新 4 张，`$topN` 实现）、`PATCH/DELETE /api/groups/:id`、`GET /api/memes`（按 `group` 过滤 + `limit`/`offset` 分页，最近使用分组附加 50 上限）、`POST /api/memes`（multipart 多文件上传，`groupId` 可选，缺省入未分组；逐文件校验，返回 `{ results: [{ name, status: "created"|"failed", reason }] }`，单个坏文件不阻断整批）、`PATCH/DELETE /api/memes/:id`（改名/移动/收藏切换，删除时清理原图+缩略图）、`POST /api/memes/:id/use`（记录最近使用）、`GET /api/memes/:id/file`（原图，支持 `Range`，`cache-control: private, immutable`）、`GET /api/memes/:id/thumb`（缩略图，无缩略图时回退原图）、`GET /api/overview`（表情总数/收藏数/分组数（不含全部系统分组）/存储占用，5s TTL 缓存）、`GET /api/health`（公开健康检查，心跳检测用）。
+> 前端已接入 API：`useMemes()` 拉取分组并提供分组/表情的增删改，分组详情页为**无限滚动**（`useIntersectionObserver` + 底部哨兵，滚动自动加载下一批）；表情卡片用原生 `<img>` 直连文件端点（避免 IPX 二次代理），**GIF 用原图 URL 保留动画、其他格式走缩略图**。上传逻辑收敛在双端 `useUpload.ts`（XHR 字节级进度、客户端预校验、失败逐项展示原因 + 一键重试、按 20 个/100MB 分批限速、单次上限 500 个）。ObjectId 校验统一走 `nuxt-app/server/utils/validate.ts` 的 `isValidId`/`requireValidId`；前端错误解析统一走 `app/utils/error.ts` 的 `getErrorMessage` + `useAsyncAction`。
 
-> **实时同步**：变更类 API（分组/表情增删改）在写入后调用 `broadcastRealtime(type)` 广播（`nuxt-app/server/utils/realtime.ts`，基于 `server/routes/ws.ts` 的 `/ws` 连接池）；`server/middleware/auth.ts` 保护 `/ws` 与全部 `/api/**`（除 `/api/auth/**`、`/api/_auth/**`），WebSocket 连接同样要求会话 Cookie 或 `?token=`。前端订阅见 `nuxt-app/app/composables/useRealtime.ts`（登录后自动建连，收到 `groups-changed`/`memes-changed` 即 `refreshNuxtData`）；桌面端见 `tauri-app/src/composables/useRealtime.ts`（`ws://{server}/ws?token=<会话令牌>`）。新增变更类 API 时记得在写入后广播，避免多端状态不一致。
+> **实时同步**：变更类 API（分组/表情增删改）在写入后调用 `broadcastRealtime(type)` 广播（`nuxt-app/server/utils/realtime.ts`，基于 `server/routes/ws.ts` 的 `/ws` 连接池），广播携带**自增 `revision`**；`/ws` 在连接建立时下发 `{ type: 'sync', revision }`，客户端（双端 `useRealtime`）维护 `lastRevision`，收到 `sync` 或变更消息时 revision 落后即全量刷新——**断线重连自动补差，不丢失离线期间的变更**。`server/middleware/auth.ts` 保护 `/ws` 与全部 `/api/**`（除 `/api/auth/**`、`/api/_auth/**`、`/api/health`），WebSocket 连接同样要求会话 Cookie 或 `?token=`。前端订阅见 `nuxt-app/app/composables/useRealtime.ts`（登录后自动建连，收到 `groups-changed`/`memes-changed` 即 `refreshNuxtData`）；桌面端见 `tauri-app/src/composables/useRealtime.ts`（`ws://{server}/ws?token=<会话令牌>`）。新增变更类 API 时记得在写入后广播，避免多端状态不一致。
+
+> **桌面端增强（壳层 + UI）**：自建标题栏（`tauri.conf.json` `decorations: false` + `tauri-app/src/components/TitleBar.vue` 三大键，窗口能力权限在 `src-tauri/capabilities/default.json`：`start-dragging` / `minimize` / `maximize` / `unmaximize` / `toggle-maximize` / `close`），Logo 仅展示在标题栏，侧边栏不再重复放 Logo。
+>
+> 系统托盘 + 全局快捷键 `Ctrl+Alt+N`（默认值，`src-tauri/src/lib.rs`，设置中心可自定义并录制新组合键，前端 `useGlobalShortcut` 启动时应用存储值）；托盘左键/快捷键切换窗口显隐，关闭按钮为隐藏到托盘，托盘菜单「退出」才真正退出。窗口显隐用 Rust 内部 `MAIN_WINDOW_SHOWN` 原子标志做确定性切换（不依赖 Windows 上不可靠的 `is_focused`）。**全局快捷键语义**：仍是「显示/隐藏」主窗口，但在窗口由隐藏变为显示时，Rust 向 Vue 发出 `open-favorites` 事件，`App.vue` 刷新分组后直接切入**收藏分组**（`/memes/:id`）。
+>
+> 窗口默认最小尺寸打开（`tauri.conf.json` 默认 `960×600`，与 `minWidth/minHeight` 一致），启动时 `clamp_window_to_monitor` 按主屏逻辑分辨率夹取初始/最小尺寸（`min(960, 屏宽) × min(600, 屏高)`），保证 1080P 及以上（含高 DPI 缩放）不超出屏幕。最小窗口布局（`tauri-app/src/assets/css/main.css` 的 `@media (max-width: 1023px)`）：侧边栏**始终显示**并固定 280px，顶栏侧栏按钮可展开/收起——默认展开（表情库 4 列），收起后侧栏隐藏、表情库切换为 6 列；表情网格列宽按可用宽度动态计算以填满内容区。
+>
+> 设置中心 `/settings`（服务器地址 / 连接状态心跳 `useHeartbeat` / 主题 / 界面缩放 `uiScale` / 复制行为开关 / 账号与数据 / 关于）；服务器断连专属页 `/disconnected`（心跳离线自动跳转、每 3s 重试、恢复自动返回，`App.vue` 全局路由守卫）。桌面端界面缩放：`main.css` 按窗口宽度放大根字号（≥1600/1920/2560/3440px），`uiScale` 设置可手动覆盖。
 
 实现任何功能前先确认与上述规划的关系，保持模块边界清晰（页面 / 组件 / composable / server API / 数据模型分层），并优先以 API 形式暴露。

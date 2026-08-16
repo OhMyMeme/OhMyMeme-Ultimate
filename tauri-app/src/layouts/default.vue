@@ -4,16 +4,32 @@ import { useRoute, useRouter } from "vue-router";
 import type { NavigationMenuItem } from "@nuxt/ui";
 import { useMemes } from "../composables/useMemes";
 import { useRealtime } from "../composables/useRealtime";
+import { useHeartbeat } from "../composables/useHeartbeat";
 
 const route = useRoute();
 const router = useRouter();
 const open = ref(false);
+const sidebarCollapsed = ref(false);
 
 const memes = useMemes();
 const memeGroups = memes.groups;
 await memes.refresh();
 
 useRealtime();
+
+const heartbeat = useHeartbeat();
+const statusDotClass = computed(() => {
+  switch (heartbeat.status.value) {
+    case "online":
+      return "bg-green-500";
+    case "offline":
+      return "bg-red-500";
+    case "checking":
+      return "bg-amber-400 animate-pulse";
+    default:
+      return "bg-zinc-400";
+  }
+});
 
 const navigationOpen = ref<string[]>(route.path.startsWith("/memes") ? ["memes"] : []);
 
@@ -41,6 +57,7 @@ const links = computed<NavigationMenuItem[][]>(() => [[{
   defaultOpen: true,
   children: memeGroups.value.map(group => ({
     label: group.name,
+    icon: group.isFavorites ? "i-lucide-star" : group.isRecent ? "i-lucide-clock" : group.isUngrouped ? "i-lucide-inbox" : undefined,
     to: `/memes/${group.id}`,
     onSelect: () => {
       open.value = false;
@@ -53,29 +70,20 @@ const links = computed<NavigationMenuItem[][]>(() => [[{
 </script>
 
 <template>
-  <UDashboardGroup unit="rem">
+  <UDashboardGroup
+    unit="rem"
+    :persistent="false"
+    :class="['top-9', { 'desktop-sidebar-is-collapsed': sidebarCollapsed }]"
+  >
     <UDashboardSidebar
       id="default"
       v-model:open="open"
+      v-model:collapsed="sidebarCollapsed"
       collapsible
       resizable
-      class="bg-elevated/25"
+      class="desktop-sidebar bg-elevated/25"
       :ui="{ footer: 'lg:border-t lg:border-default' }"
     >
-      <template #header="{ collapsed }">
-        <div
-          class="flex items-center gap-2.5 py-2"
-          :class="[collapsed ? 'justify-center px-1' : 'px-3']"
-        >
-          <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <UIcon name="i-lucide-smile" class="size-5" />
-          </div>
-          <span v-if="!collapsed" class="text-base font-semibold tracking-tight text-highlighted truncate">
-            OhMyMeme
-          </span>
-        </div>
-      </template>
-
       <template #default="{ collapsed }">
         <UNavigationMenu
           v-model="navigationOpen"
@@ -89,15 +97,19 @@ const links = computed<NavigationMenuItem[][]>(() => [[{
 
       <template #footer="{ collapsed }">
         <UButton
-          :label="collapsed ? undefined : '服务器设置'"
-          icon="i-lucide-server"
+          :label="collapsed ? undefined : '设置'"
+          icon="i-lucide-settings"
           color="neutral"
           variant="ghost"
           block
           :square="collapsed"
           class="justify-start"
-          @click="router.push('/connect')"
-        />
+          @click="router.push('/settings')"
+        >
+          <template #trailing>
+            <span class="size-2 rounded-full ring-2 ring-bg" :class="statusDotClass" />
+          </template>
+        </UButton>
       </template>
     </UDashboardSidebar>
 

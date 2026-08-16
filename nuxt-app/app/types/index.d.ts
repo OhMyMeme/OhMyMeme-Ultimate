@@ -19,6 +19,7 @@ export interface Meme {
   mimeType: string
   size: number
   url: string
+  thumbUrl?: string
   createdAt?: string
 }
 

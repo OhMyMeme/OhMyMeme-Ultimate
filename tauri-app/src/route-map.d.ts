@@ -52,6 +52,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/disconnected': RouteRecordInfo<
+      '/disconnected',
+      '/disconnected',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/memes/': RouteRecordInfo<
       '/memes/',
       '/memes',
@@ -64,6 +71,13 @@ declare module 'vue-router/auto-routes' {
       '/memes/:group',
       { group: ParamValue<true> },
       { group: ParamValue<false> },
+      | never
+    >,
+    '/settings': RouteRecordInfo<
+      '/settings',
+      '/settings',
+      Record<never, never>,
+      Record<never, never>,
       | never
     >,
   }
@@ -103,6 +117,14 @@ declare module 'vue-router/auto-routes' {
       pathParamNames:
         | never
     }
+    'src/pages/disconnected.vue': {
+      routes:
+        | '/disconnected'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
     'src/pages/memes/index.vue': {
       routes:
         | '/memes/'
@@ -118,6 +140,14 @@ declare module 'vue-router/auto-routes' {
         | never
       pathParamNames:
         | 'group'
+    }
+    'src/pages/settings.vue': {
+      routes:
+        | '/settings'
+      views:
+        | never
+      pathParamNames:
+        | never
     }
   }
 

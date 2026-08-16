@@ -4,7 +4,7 @@ mod clipboard {
     use std::path::Path;
 
     use windows::core::BOOL;
-    use windows::Win32::Foundation::{HANDLE, HWND, POINT};
+    use windows::Win32::Foundation::{HANDLE, HWND, POINT, GlobalFree};
     use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
     use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
     use windows::Win32::System::Ole::CF_HDROP;
@@ -23,6 +23,7 @@ mod clipboard {
             let hmem = GlobalAlloc(GMEM_MOVEABLE, total).map_err(|e| format!("GlobalAlloc 失败: {e}"))?;
             let ptr = GlobalLock(hmem);
             if ptr.is_null() {
+                let _ = GlobalFree(Some(hmem));
                 return Err("GlobalLock 返回空指针".to_string());
             }
 
@@ -35,9 +36,16 @@ mod clipboard {
             let _ = GlobalUnlock(hmem);
             eprintln!("[copy] 已写入 DROPFILES 内存块");
 
-            OpenClipboard(None::<HWND>).map_err(|e| format!("OpenClipboard 失败: {e}"))?;
+            if let Err(e) = OpenClipboard(None::<HWND>) {
+                let _ = GlobalFree(Some(hmem));
+                return Err(format!("OpenClipboard 失败: {e}"));
+            }
             let _ = EmptyClipboard();
-            SetClipboardData(CF_HDROP.0 as u32, Some(HANDLE(hmem.0))).map_err(|e| format!("SetClipboardData 失败: {e}"))?;
+            if let Err(e) = SetClipboardData(CF_HDROP.0 as u32, Some(HANDLE(hmem.0))) {
+                let _ = CloseClipboard();
+                let _ = GlobalFree(Some(hmem));
+                return Err(format!("SetClipboardData 失败: {e}"));
+            }
             let _ = CloseClipboard();
             eprintln!("[copy] CF_HDROP 已写入剪贴板");
         }
@@ -88,11 +96,143 @@ fn copy_file_to_clipboard(bytes: Vec<u8>, extension: String) -> Result<(), Strin
     }
 }
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Emitter, LogicalSize, Manager,
+};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+const DEFAULT_SHORTCUT: &str = "ctrl+alt+n";
+
+static MAIN_WINDOW_SHOWN: AtomicBool = AtomicBool::new(true);
+
+#[tauri::command]
+fn set_global_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<(), String> {
+    let gs = app.global_shortcut();
+    gs.unregister_all().map_err(|e| format!("取消原快捷键失败: {e}"))?;
+    if let Err(e) = gs.register(shortcut.as_str()) {
+        let _ = gs.register(DEFAULT_SHORTCUT);
+        return Err(format!("注册快捷键失败: {e}"));
+    }
+    Ok(())
+}
+
+fn show_main_window(app: &tauri::AppHandle) {
+    MAIN_WINDOW_SHOWN.store(true, Ordering::SeqCst);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+fn hide_main_window(app: &tauri::AppHandle) {
+    MAIN_WINDOW_SHOWN.store(false, Ordering::SeqCst);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
+fn toggle_main_window(app: &tauri::AppHandle) {
+    if MAIN_WINDOW_SHOWN.swap(false, Ordering::SeqCst) {
+        hide_main_window(app);
+    } else {
+        show_main_window(app);
+    }
+}
+
+fn open_favorites(app: &tauri::AppHandle) {
+    if MAIN_WINDOW_SHOWN.swap(false, Ordering::SeqCst) {
+        hide_main_window(app);
+        return;
+    }
+    show_main_window(app);
+    let _ = app.emit("open-favorites", ());
+}
+
+fn clamp_window_to_monitor(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let Ok(Some(monitor)) = window.current_monitor() else {
+        return;
+    };
+    let scale = monitor.scale_factor();
+    let width = (monitor.size().width as f64 / scale) as u32;
+    let height = (monitor.size().height as f64 / scale) as u32;
+    let width = width.min(960);
+    let height = height.min(600);
+    if width == 0 || height == 0 {
+        return;
+    }
+    let _ = window.set_size(LogicalSize::new(width as f64, height as f64));
+    let _ = window.set_min_size(Some(LogicalSize::new(width as f64, height as f64)));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![copy_file_to_clipboard])
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    match event.state {
+                        ShortcutState::Pressed => open_favorites(app),
+                        _ => {}
+                    }
+                })
+                .build()
+        )
+        .setup(|app| {
+            clamp_window_to_monitor(app.handle());
+
+            if let Err(e) = app.global_shortcut().register(DEFAULT_SHORTCUT) {
+                eprintln!("[shortcut] 注册全局快捷键 {DEFAULT_SHORTCUT} 失败: {e}");
+            }
+
+            let show = MenuItem::with_id(app, "show", "显示 OhMyMeme", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+
+            let mut tray = TrayIconBuilder::with_id("main")
+                .menu(&menu)
+                .show_menu_on_left_click(false);
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => show_main_window(app),
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        toggle_main_window(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                MAIN_WINDOW_SHOWN.store(false, Ordering::SeqCst);
+                let _ = window.hide();
+            }
+        })
+        .invoke_handler(tauri::generate_handler![copy_file_to_clipboard, set_global_shortcut])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

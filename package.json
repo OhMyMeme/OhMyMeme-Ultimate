@@ -1,6 +1,6 @@
 {
   "name": "ohmymeme-ultimate",
-  "version": "0.1.0",
+  "version": "0.2.0-beta",
   "private": true,
   "description": "OhMyMeme-Ultimate monorepo (Web Nuxt + Desktop Tauri)",
   "workspaces": [
@@ -16,6 +16,7 @@
     "build:desktop": "turbo run build --filter=ohmymeme-desktop",
     "preview": "turbo run preview --filter=ohmymeme-web",
     "generate": "turbo run generate --filter=ohmymeme-web",
+    "reset:dev": "node nuxt-app/scripts/reset-dev.mjs",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck"
   },
@@ -31,6 +32,7 @@
     "esbuild@0.28.2": true,
     "esbuild@0.25.12": true,
     "vue-demi@0.14.10": true,
-    "unrs-resolver@1.12.2": true
+    "unrs-resolver@1.12.2": true,
+    "sharp@0.33.5": true
   }
 }

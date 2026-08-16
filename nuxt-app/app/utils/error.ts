@@ -1,3 +1,4 @@
 export function getErrorMessage(error: unknown, fallback = '请重试'): string {
-  return (error as { data?: { statusMessage?: string } })?.data?.statusMessage ?? fallback
+  const data = (error as { data?: { message?: string, statusMessage?: string } })?.data
+  return data?.message ?? data?.statusMessage ?? fallback
 }

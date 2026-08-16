@@ -17,7 +17,7 @@ const name = ref('')
 const targetGroupId = ref('')
 
 const groupOptions = computed(() =>
-  groups.value.filter(group => group.id !== props.meme.groupId).map(group => ({ label: group.name, value: group.id }))
+  groups.value.filter(group => group.id !== props.meme.groupId && !group.isFavorites && !group.isRecent).map(group => ({ label: group.name, value: group.id }))
 )
 
 watch(renameOpen, (value) => {
@@ -71,6 +71,7 @@ async function onDelete() {
       color="neutral"
       variant="ghost"
       size="sm"
+      title="更多操作"
       class="bg-elevated/80 backdrop-blur"
     />
   </UDropdownMenu>

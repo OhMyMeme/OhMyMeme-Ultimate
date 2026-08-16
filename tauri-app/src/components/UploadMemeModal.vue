@@ -1,109 +1,46 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { useApi } from "../composables/useApi";
+import { computed, ref, watch } from "vue";
 import { useMemes } from "../composables/useMemes";
+import { useUpload } from "../composables/useUpload";
 
 const open = defineModel<boolean>('open', { default: false })
 
-const toast = useToast()
-const { groups, refresh } = useMemes()
-const { uploadMemes } = useApi()
+const { groups, refresh } = useMemes();
+const groupId = ref<string>(groups.value.find(group => group.isUngrouped)?.id ?? groups.value.find(group => !group.isFavorites && !group.isRecent)?.id ?? '');
 
-const BATCH_SIZE = 20
+const groupOptions = computed(() => groups.value.filter(group => !group.isFavorites && !group.isRecent).map(group => ({ label: group.name, value: group.id })));
 
-interface PickedFile {
-  file: File
-  url: string
-}
-
-const files = ref<PickedFile[]>([])
-const groupId = ref<string>(groups.value[0]?.id ?? '')
-const uploading = ref(false)
-const uploadedCount = ref(0)
-const failedCount = ref(0)
-const dragActive = ref(false)
-const fileInput = ref<HTMLInputElement>()
-
-const groupOptions = computed(() => groups.value.map(group => ({ label: group.name, value: group.id })))
-
-const progress = computed(() => {
-  if (!files.value.length) {
-    return 0
+watch(groups, (value) => {
+  if (!value.some(group => group.id === groupId.value)) {
+    groupId.value = value.find(group => group.isUngrouped)?.id ?? value.find(group => !group.isFavorites && !group.isRecent)?.id ?? ''
   }
-  return Math.round((uploadedCount.value / files.value.length) * 100)
 })
 
+const upload = useUpload(groupId, refresh);
+
+const dragActive = ref(false);
+const fileInput = ref<HTMLInputElement>();
+
 function onSelectFiles() {
-  fileInput.value?.click()
+  fileInput.value?.click();
 }
 
 function onFilesChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  addFiles(Array.from(input.files || []))
-  input.value = ''
+  const input = event.target as HTMLInputElement;
+  upload.addFiles(Array.from(input.files || []));
+  input.value = '';
 }
 
 function onDrop(event: DragEvent) {
-  dragActive.value = false
-  addFiles(Array.from(event.dataTransfer?.files || []))
-}
-
-function addFiles(incoming: File[]) {
-  const images = incoming.filter(file => file.type.startsWith('image/'))
-  images.forEach(file => files.value.push({ file, url: URL.createObjectURL(file) }))
-}
-
-function removeFile(index: number) {
-  const item = files.value[index]
-  if (item) {
-    URL.revokeObjectURL(item.url)
-  }
-  files.value.splice(index, 1)
-}
-
-function reset() {
-  files.value.forEach(item => URL.revokeObjectURL(item.url))
-  files.value = []
-  uploadedCount.value = 0
-  failedCount.value = 0
-}
-
-async function uploadBatch(batch: PickedFile[]) {
-  await uploadMemes(groupId.value, batch.map(item => item.file))
+  dragActive.value = false;
+  upload.addFiles(Array.from(event.dataTransfer?.files || []));
 }
 
 async function onSubmit() {
-  if (!files.value.length || uploading.value || !groupId.value) {
-    return
-  }
-
-  uploading.value = true
-  uploadedCount.value = 0
-  failedCount.value = 0
-  const total = files.value.length
-
-  try {
-    for (let i = 0; i < total; i += BATCH_SIZE) {
-      const batch = files.value.slice(i, i + BATCH_SIZE)
-      try {
-        await uploadBatch(batch)
-        uploadedCount.value += batch.length
-      } catch {
-        failedCount.value += batch.length
-      }
-    }
-
-    if (failedCount.value === 0) {
-      toast.add({ title: '上传成功', description: `已上传 ${total} 个表情`, color: 'success' })
-    } else {
-      toast.add({ title: '上传完成', description: `成功 ${uploadedCount.value}，失败 ${failedCount.value}`, color: 'warning' })
-    }
-
-    open.value = false
-    reset()
-    await refresh()
-  } finally {
-    uploading.value = false
+  await upload.submit();
+  if (upload.failedCount === 0) {
+    open.value = false;
+    upload.reset();
   }
 }
 </script>
@@ -112,22 +49,23 @@ async function onSubmit() {
   <UModal
     v-model:open="open"
     title="上传表情"
-    :dismissible="!uploading"
-    :close="!uploading"
+    :dismissible="!upload.uploading"
+    :close="!upload.uploading"
   >
     <template #body>
-      <div v-if="uploading" class="flex flex-col gap-3 py-6">
+      <div v-if="upload.uploading" class="flex flex-col gap-3 py-6">
         <div class="flex items-center justify-between">
           <p class="text-sm font-medium text-highlighted">
             正在上传...
           </p>
           <p class="text-xs text-muted">
-            {{ uploadedCount }} / {{ files.length }}
+            {{ upload.doneCount + upload.failedCount }} / {{ upload.uploadableCount }}
           </p>
         </div>
-        <UProgress :model-value="progress" />
+        <UProgress :model-value="upload.progress" />
         <p class="text-xs text-muted">
-          已完成 {{ progress }}%，失败 {{ failedCount }} 个
+          {{ upload.uploadedBytesText }} / {{ upload.totalBytesText }}（{{ upload.progress }}%）
+          <span v-if="upload.failedCount">，失败 {{ upload.failedCount }} 个</span>
         </p>
       </div>
 
@@ -143,6 +81,9 @@ async function onSubmit() {
           <p class="text-sm text-muted">
             将图片拖拽到这里，或点击选择文件
           </p>
+          <p class="text-xs text-dimmed">
+            支持 PNG / JPEG / GIF / WebP，单个不超过 20MB
+          </p>
           <UButton
             label="选择文件"
             icon="i-lucide-folder-open"
@@ -153,24 +94,57 @@ async function onSubmit() {
           <input
             ref="fileInput"
             type="file"
-            accept="image/*"
+            accept="image/png,image/jpeg,image/gif,image/webp"
             multiple
             class="hidden"
             @change="onFilesChange"
           >
         </div>
 
-        <div v-if="files.length" class="grid grid-cols-4 gap-3 sm:grid-cols-6">
-          <div v-for="(item, index) in files" :key="item.url" class="relative">
-            <img :src="item.url" :alt="item.file.name" class="aspect-square w-full rounded-lg object-cover">
+        <div v-if="upload.files.length" class="grid grid-cols-4 gap-3 sm:grid-cols-6">
+          <div v-for="(item, index) in upload.files" :key="item.url" class="relative">
+            <img
+              :src="item.url"
+              :alt="item.file.name"
+              class="aspect-square w-full rounded-lg object-cover"
+              :class="item.status === 'failed' ? 'opacity-60' : ''"
+            >
+
+            <div
+              v-if="item.status === 'uploading'"
+              class="absolute inset-0 flex items-center justify-center rounded-lg bg-black/30"
+            >
+              <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-white" />
+            </div>
+            <div
+              v-else-if="item.status === 'success'"
+              class="absolute inset-x-0 bottom-0 flex items-center justify-center rounded-b-lg bg-green-500/80 py-0.5"
+            >
+              <UIcon name="i-lucide-check" class="size-3 text-white" />
+            </div>
+            <div
+              v-else-if="item.status === 'failed'"
+              :title="item.reason"
+              class="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 rounded-b-lg bg-red-500/80 py-0.5"
+            >
+              <UIcon name="i-lucide-x" class="size-3 text-white" />
+            </div>
+
             <button
               type="button"
               class="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-elevated text-muted ring ring-default hover:text-default"
-              @click="removeFile(index)"
+              @click="upload.removeFile(index)"
             >
               <UIcon name="i-lucide-x" class="size-3" />
             </button>
           </div>
+        </div>
+
+        <div
+          v-if="upload.failedCount > 0 && !upload.uploading"
+          class="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-600 dark:text-red-400"
+        >
+          {{ upload.failedCount }} 个文件上传失败，可悬停缩略图查看原因，或点击「重试失败文件」
         </div>
 
         <div v-if="groupOptions.length" class="flex items-center justify-between gap-4">
@@ -183,7 +157,7 @@ async function onSubmit() {
             />
           </UFormField>
           <p class="text-xs text-muted">
-            {{ files.length }} 个文件待上传
+            {{ upload.uploadableCount }} 个文件待上传
           </p>
         </div>
         <p v-else class="text-xs text-muted">
@@ -193,7 +167,7 @@ async function onSubmit() {
     </template>
 
     <template #footer>
-      <div v-if="!uploading" class="flex justify-end gap-2">
+      <div v-if="!upload.uploading" class="flex justify-end gap-2">
         <UButton
           label="取消"
           color="neutral"
@@ -201,10 +175,17 @@ async function onSubmit() {
           @click="open = false"
         />
         <UButton
+          v-if="upload.failedCount > 0"
+          label="重试失败文件"
+          icon="i-lucide-refresh-cw"
+          color="warning"
+          @click="upload.retryFailed"
+        />
+        <UButton
           label="上传"
           icon="i-lucide-upload"
           color="primary"
-          :disabled="!files.length || !groupId"
+          :disabled="!upload.uploadableCount || !groupId"
           @click="onSubmit"
         />
       </div>

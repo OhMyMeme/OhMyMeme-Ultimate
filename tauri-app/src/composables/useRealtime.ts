@@ -1,4 +1,4 @@
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useWebSocket } from "@vueuse/core";
 import { useServer } from "./useServer";
 import { useAuth } from "./useAuth";
@@ -13,6 +13,8 @@ export function useRealtime() {
   const { sessionToken } = useAuth();
   const memes = useMemes();
 
+  const lastRevision = ref(0);
+
   const url = computed(() => {
     if (!baseUrl.value || !sessionToken.value) {
       return undefined;
@@ -23,12 +25,21 @@ export function useRealtime() {
   const { status, open, close } = useWebSocket(url, {
     immediate: false,
     autoConnect: false,
-    autoReconnect: { retries: 3, delay: 2000 },
+    autoReconnect: { retries: Infinity, delay: 2000 },
     onMessage: (_ws, event) => {
       try {
         const message = JSON.parse(event.data);
-        if (message?.type === "groups-changed" || message?.type === "memes-changed") {
+        const revision = typeof message?.revision === "number" ? message.revision : 0;
+        if (message?.type === "sync") {
+          if (lastRevision.value > 0 && revision > lastRevision.value) {
+            memes.refresh();
+            memes.bumpRevision();
+          }
+          lastRevision.value = Math.max(lastRevision.value, revision);
+        } else if (message?.type === "groups-changed" || message?.type === "memes-changed") {
+          lastRevision.value = Math.max(lastRevision.value, revision);
           memes.refresh();
+          memes.bumpRevision();
         }
       } catch {
         // ignore non-JSON messages

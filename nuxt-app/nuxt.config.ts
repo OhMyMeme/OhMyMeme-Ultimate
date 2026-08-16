@@ -14,13 +14,9 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
 
   runtimeConfig: {
-    accessToken: ''
-  },
-
-  routeRules: {
-    '/api/**': {
-      cors: true
-    }
+    accessToken: '',
+    allowedOrigins: '',
+    webEnabled: false
   },
 
   compatibilityDate: '2026-06-30',
@@ -28,6 +24,9 @@ export default defineNuxtConfig({
   nitro: {
     experimental: {
       websocket: true
+    },
+    externals: {
+      external: ['sharp']
     },
     storage: {
       memes: {

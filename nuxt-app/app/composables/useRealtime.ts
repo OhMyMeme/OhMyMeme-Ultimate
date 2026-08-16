@@ -1,15 +1,25 @@
 export function useRealtime() {
   const { loggedIn } = useUserSession()
 
+  const lastRevision = ref(0)
+
   const { status, data, open, close } = useWebSocket('/ws', {
     immediate: false,
-    autoReconnect: { retries: 3, delay: 2000 },
+    autoReconnect: { retries: Infinity, delay: 2000 },
     onMessage: (_ws, event) => {
       try {
         const message = JSON.parse(event.data)
-        if (message?.type === 'groups-changed') {
+        const revision = typeof message?.revision === 'number' ? message.revision : 0
+        if (message?.type === 'sync') {
+          if (lastRevision.value > 0 && revision > lastRevision.value) {
+            refreshNuxtData()
+          }
+          lastRevision.value = Math.max(lastRevision.value, revision)
+        } else if (message?.type === 'groups-changed') {
+          lastRevision.value = Math.max(lastRevision.value, revision)
           refreshNuxtData('meme-groups')
         } else if (message?.type === 'memes-changed') {
+          lastRevision.value = Math.max(lastRevision.value, revision)
           refreshNuxtData()
         }
       } catch {

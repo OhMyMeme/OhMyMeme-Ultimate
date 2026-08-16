@@ -3,6 +3,8 @@ import type { Meme } from "../types";
 import { getErrorMessage } from "../utils/error";
 import { useServer } from "./useServer";
 import { useAuth } from "./useAuth";
+import { useApi } from "./useApi";
+import { useSettings } from "./useSettings";
 
 const isWindowsTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window && /Windows/i.test(navigator.userAgent);
 
@@ -20,6 +22,22 @@ export function useCopyMeme() {
   const toast = useToast();
   const { resolveUrl } = useServer();
   const { sessionToken } = useAuth();
+  const { markUsed } = useApi();
+  const { copyToast, copyPngFallback } = useSettings();
+
+  function recordUsage(id: string) {
+    markUsed(id).catch(() => {});
+  }
+
+  function success(message?: string) {
+    if (copyToast.value) {
+      toast.add({
+        title: "已复制",
+        description: message,
+        color: "success"
+      });
+    }
+  }
 
   async function copy(meme: Meme) {
     const url = resolveUrl(meme.url);
@@ -40,11 +58,8 @@ export function useCopyMeme() {
         console.log(`[copy] 走原生剪贴板 CF_HDROP (扩展名 .${extension})`);
         await invoke("copy_file_to_clipboard", { bytes: Array.from(bytes), extension });
         console.log("[copy] CF_HDROP 写入成功");
-        toast.add({
-          title: "已复制",
-          description: meme.mimeType === "image/gif" ? "GIF 已复制，粘贴到聊天保留动画" : undefined,
-          color: "success"
-        });
+        recordUsage(meme.id);
+        success(meme.mimeType === "image/gif" ? "GIF 已复制，粘贴到聊天保留动画" : undefined);
         return;
       }
 
@@ -52,10 +67,15 @@ export function useCopyMeme() {
       try {
         await navigator.clipboard.write([new ClipboardItem({ [meme.mimeType]: blob })]);
       } catch {
-        const png = await blobToPng(blob);
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+        if (copyPngFallback.value) {
+          const png = await blobToPng(blob);
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+        } else {
+          throw new Error("剪贴板不支持该图片格式");
+        }
       }
-      toast.add({ title: "已复制", color: "success" });
+      recordUsage(meme.id);
+      success();
     } catch (error) {
       console.error("[copy] 复制失败", error);
       toast.add({ title: "复制失败", description: getErrorMessage(error), color: "error" });

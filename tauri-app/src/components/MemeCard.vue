@@ -4,6 +4,8 @@ import type { Meme } from "../types";
 import { useCopyMeme } from "../composables/useCopyMeme";
 import { useServer } from "../composables/useServer";
 import { useAuth } from "../composables/useAuth";
+import { useMemes } from "../composables/useMemes";
+import { useAsyncAction } from "../composables/useAsyncAction";
 
 const props = defineProps<{
   meme: Meme
@@ -18,8 +20,13 @@ const emit = defineEmits<{
 const { resolveUrl } = useServer()
 const { copy } = useCopyMeme()
 const { authorizeUrl } = useAuth()
+const { toggleFavorite } = useMemes()
+const { pending: favoritePending, run } = useAsyncAction()
 
-const src = computed(() => authorizeUrl(resolveUrl(props.meme.url)))
+const src = computed(() => {
+  const preview = props.meme.mimeType === "image/gif" ? props.meme.url : (props.meme.thumbUrl || props.meme.url);
+  return authorizeUrl(resolveUrl(preview));
+});
 
 function onClick() {
   if (props.selectable) {
@@ -27,6 +34,12 @@ function onClick() {
   } else {
     copy(props.meme)
   }
+}
+
+async function onToggleFavorite() {
+  await run(() => toggleFavorite(props.meme.id, !props.meme.favorite), {
+    success: props.meme.favorite ? '已取消收藏' : '已收藏'
+  })
 }
 </script>
 
@@ -45,7 +58,7 @@ function onClick() {
     >
 
     <div class="flex items-center gap-2 p-2">
-      <span class="min-w-0 flex-1 truncate text-xs text-muted">
+      <span class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">
         {{ meme.name }}
       </span>
     </div>
@@ -56,6 +69,28 @@ function onClick() {
         :class="selected ? 'border-primary bg-primary text-white' : 'border-default bg-elevated/80 text-transparent'"
       >
         <UIcon name="i-lucide-check" class="size-3" />
+      </div>
+    </div>
+
+    <div
+      v-if="!selectable"
+      class="absolute left-1.5 top-1.5"
+      :title="meme.favorite ? '取消收藏' : '收藏'"
+      @click.stop
+    >
+      <div
+        class="transition-opacity"
+        :class="meme.favorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+      >
+        <UButton
+          icon="i-lucide-star"
+          size="sm"
+          :color="meme.favorite ? 'warning' : 'neutral'"
+          variant="ghost"
+          class="bg-elevated/80 backdrop-blur"
+          :loading="favoritePending"
+          @click="onToggleFavorite"
+        />
       </div>
     </div>
 

@@ -5,10 +5,11 @@ definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
 const groupId = computed(() => String(route.params.group))
-const page = ref(1)
 
 const isMobile = useMediaQuery('(max-width: 639px)')
 const isTablet = useMediaQuery('(min-width: 640px) and (max-width: 1023px)')
+const isLarge = useMediaQuery('(min-width: 1024px) and (max-width: 1279px)')
+const isXl = useMediaQuery('(min-width: 1280px) and (max-width: 1535px)')
 
 const pageSize = computed(() => {
   if (isMobile.value) {
@@ -17,17 +18,19 @@ const pageSize = computed(() => {
   if (isTablet.value) {
     return 32
   }
-  return 48
-})
-
-watch(pageSize, () => {
-  page.value = 1
+  if (isLarge.value) {
+    return 48
+  }
+  if (isXl.value) {
+    return 60
+  }
+  return 72
 })
 
 const groupMemes = useAsyncData(
   `memes-group-${groupId.value}`,
-  () => useRequestFetch()<MemeListResponse>(`/api/memes?group=${groupId.value}&limit=${pageSize.value}&offset=${(page.value - 1) * pageSize.value}`),
-  { watch: [page, pageSize] }
+  () => useRequestFetch()<MemeListResponse>(`/api/memes?group=${groupId.value}&limit=${pageSize.value}&offset=0`),
+  { watch: [pageSize] }
 )
 
 const { groupById } = await useMemes()
@@ -39,9 +42,45 @@ if (!group.value) {
   throw createError({ statusCode: 404, statusMessage: '分组不存在' })
 }
 
-const items = computed(() => groupMemes.data.value?.items ?? [])
-const total = computed(() => groupMemes.data.value?.total ?? 0)
-const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const items = ref<Meme[]>([])
+const total = ref(0)
+const loadingMore = ref(false)
+const hasMore = computed(() => items.value.length < total.value)
+
+function apply(data?: MemeListResponse | null) {
+  items.value = data?.items ?? []
+  total.value = data?.total ?? 0
+}
+
+apply(groupMemes.data.value)
+watch(groupMemes.data, data => apply(data))
+
+watch(groupId, () => {
+  items.value = []
+  total.value = 0
+  groupMemes.refresh()
+})
+
+async function loadMore() {
+  if (loadingMore.value || !hasMore.value) {
+    return
+  }
+  loadingMore.value = true
+  try {
+    const data = await $fetch<MemeListResponse>(`/api/memes?group=${groupId.value}&limit=${pageSize.value}&offset=${items.value.length}`)
+    items.value = [...items.value, ...data.items]
+    total.value = data.total
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+const sentinel = ref<HTMLElement | null>(null)
+useIntersectionObserver(sentinel, ([entry]) => {
+  if (entry?.isIntersecting) {
+    loadMore()
+  }
+})
 
 const selecting = ref(false)
 const selected = ref<Set<string>>(new Set())
@@ -106,7 +145,7 @@ function exitSelection() {
           @cancel="exitSelection"
         />
 
-        <div class="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-8">
+        <div class="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12">
           <MemeCard
             v-for="meme in items"
             :key="meme.id"
@@ -119,7 +158,7 @@ function exitSelection() {
 
         <div v-if="selecting" class="flex items-center justify-between">
           <UButton
-            label="全选本页"
+            label="全选已加载"
             color="neutral"
             variant="ghost"
             size="sm"
@@ -130,27 +169,31 @@ function exitSelection() {
           </p>
         </div>
 
-        <div class="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-          <p class="text-xs text-muted">
-            共 {{ total }} 个表情
-          </p>
-          <UPagination
-            v-if="pageCount > 1"
-            v-model:page="page"
-            :total="total"
-            :items-per-page="pageSize"
-            :sibling-count="isMobile ? 0 : 1"
-            size="xs"
-            class="self-center sm:self-auto"
-          />
+        <p class="text-xs text-muted">
+          已加载 {{ items.length }} / 共 {{ total }} 个表情
+        </p>
+
+        <div
+          v-if="hasMore"
+          ref="sentinel"
+          class="flex items-center justify-center gap-2 py-4 text-xs text-muted"
+        >
+          <template v-if="loadingMore">
+            <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
+            加载中…
+          </template>
+          <template v-else>
+            上滑加载更多
+          </template>
         </div>
       </div>
 
       <div v-else class="flex flex-col items-center justify-center gap-4 py-24 text-center">
         <div class="flex size-16 items-center justify-center rounded-2xl bg-elevated text-dimmed">
-          <UIcon name="i-lucide-image-off" class="size-8" />
+          <UIcon v-if="groupMemes.pending.value" name="i-lucide-loader-circle" class="size-8 animate-spin" />
+          <UIcon v-else name="i-lucide-image-off" class="size-8" />
         </div>
-        <div>
+        <div v-if="!groupMemes.pending.value">
           <p class="text-sm font-medium text-highlighted">
             该分组暂无表情
           </p>
