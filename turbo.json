@@ -5,26 +5,17 @@
       "cache": false,
       "persistent": true
     },
+    "dev:release": {
+      "cache": false,
+      "persistent": true
+    },
     "dev:web": {
       "cache": false,
       "persistent": true
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".output/**", "dist/**"]
-    },
-    "preview": {
-      "cache": false,
-      "persistent": true
-    },
-    "generate": {
-      "outputs": ["dist/**", ".output/**"]
-    },
-    "lint": {
-      "outputs": []
-    },
-    "typecheck": {
-      "outputs": []
+      "outputs": ["dist/**", "target/release/**"]
     },
     "postinstall": {
       "cache": false

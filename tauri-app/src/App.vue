@@ -9,13 +9,29 @@ import { useSettings } from "./composables/useSettings";
 import { useServer } from "./composables/useServer";
 import { useGlobalShortcut } from "./composables/useGlobalShortcut";
 import { useMemes } from "./composables/useMemes";
+import { usePlatform } from "./composables/usePlatform";
+import { useTheme } from "./composables/useTheme";
 
 const router = useRouter();
 const route = useRoute();
-const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+const { isTauri, isWindowsTauri } = usePlatform();
+
+const { neutral } = useTheme();
 
 const colorMode = useColorMode();
-const themeColor = computed(() => colorMode.value === "dark" ? "#18181b" : "#ffffff");
+
+const NEUTRAL_BG: Record<string, { light: string; dark: string }> = {
+  slate: { light: '#f8fafc', dark: '#020617' },
+  gray: { light: '#f9fafb', dark: '#030712' },
+  zinc: { light: '#fafafa', dark: '#09090b' },
+  neutral: { light: '#fafafa', dark: '#0a0a0a' },
+  stone: { light: '#fafaf9', dark: '#0c0a09' },
+};
+
+const themeColor = computed(() => {
+  const colors = NEUTRAL_BG[neutral.value] ?? NEUTRAL_BG.slate;
+  return colorMode.value === "dark" ? colors.dark : colors.light;
+});
 
 useHead({
   meta: [
@@ -33,6 +49,9 @@ const memes = useMemes();
 let unlistenFavorites: (() => void) | undefined;
 
 onMounted(async () => {
+  if (isWindowsTauri) {
+    document.documentElement.classList.add("platform-windows");
+  }
   startHeartbeat();
   applyShortcut(shortcut.value);
   if (!isTauri) {
@@ -87,7 +106,7 @@ watch(() => route.path, (path) => {
 </script>
 
 <template>
-  <TitleBar />
+  <TitleBar v-if="isWindowsTauri" />
   <Suspense>
     <UApp>
       <RouterView />

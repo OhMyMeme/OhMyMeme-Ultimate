@@ -96,19 +96,25 @@ fn copy_file_to_clipboard(bytes: Vec<u8>, extension: String) -> Result<(), Strin
     }
 }
 
+#[cfg(desktop)]
 use std::sync::atomic::{AtomicBool, Ordering};
 
+#[cfg(desktop)]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, LogicalSize, Manager,
 };
+#[cfg(desktop)]
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
+#[cfg(desktop)]
 const DEFAULT_SHORTCUT: &str = "ctrl+alt+n";
 
+#[cfg(desktop)]
 static MAIN_WINDOW_SHOWN: AtomicBool = AtomicBool::new(true);
 
+#[cfg(desktop)]
 #[tauri::command]
 fn set_global_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<(), String> {
     let gs = app.global_shortcut();
@@ -120,6 +126,13 @@ fn set_global_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<(), St
     Ok(())
 }
 
+#[cfg(not(desktop))]
+#[tauri::command]
+fn set_global_shortcut(_app: tauri::AppHandle, _shortcut: String) -> Result<(), String> {
+    Err("全局快捷键仅支持桌面端".to_string())
+}
+
+#[cfg(desktop)]
 fn show_main_window(app: &tauri::AppHandle) {
     MAIN_WINDOW_SHOWN.store(true, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("main") {
@@ -129,6 +142,7 @@ fn show_main_window(app: &tauri::AppHandle) {
     }
 }
 
+#[cfg(desktop)]
 fn hide_main_window(app: &tauri::AppHandle) {
     MAIN_WINDOW_SHOWN.store(false, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("main") {
@@ -136,6 +150,7 @@ fn hide_main_window(app: &tauri::AppHandle) {
     }
 }
 
+#[cfg(desktop)]
 fn toggle_main_window(app: &tauri::AppHandle) {
     if MAIN_WINDOW_SHOWN.swap(false, Ordering::SeqCst) {
         hide_main_window(app);
@@ -144,6 +159,7 @@ fn toggle_main_window(app: &tauri::AppHandle) {
     }
 }
 
+#[cfg(desktop)]
 fn open_favorites(app: &tauri::AppHandle) {
     if MAIN_WINDOW_SHOWN.swap(false, Ordering::SeqCst) {
         hide_main_window(app);
@@ -153,6 +169,7 @@ fn open_favorites(app: &tauri::AppHandle) {
     let _ = app.emit("open-favorites", ());
 }
 
+#[cfg(desktop)]
 fn clamp_window_to_monitor(app: &tauri::AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -172,19 +189,18 @@ fn clamp_window_to_monitor(app: &tauri::AppHandle) {
     let _ = window.set_min_size(Some(LogicalSize::new(width as f64, height as f64)));
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[cfg(desktop)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
-                    match event.state {
-                        ShortcutState::Pressed => open_favorites(app),
-                        _ => {}
+                    if let ShortcutState::Pressed = event.state {
+                        open_favorites(app);
                     }
                 })
-                .build()
+                .build(),
         )
         .setup(|app| {
             clamp_window_to_monitor(app.handle());
@@ -232,6 +248,17 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
+        .invoke_handler(tauri::generate_handler![copy_file_to_clipboard, set_global_shortcut])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+#[cfg(not(desktop))]
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .setup(|_app| Ok(()))
         .invoke_handler(tauri::generate_handler![copy_file_to_clipboard, set_global_shortcut])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -2,23 +2,22 @@
   "name": "ohmymeme-ultimate",
   "version": "0.2.0-beta",
   "private": true,
-  "description": "OhMyMeme-Ultimate monorepo (Web Nuxt + Desktop Tauri)",
+  "description": "OhMyMeme-Ultimate monorepo (Rust server + Desktop Tauri; Nuxt Web frontend paused)",
   "workspaces": [
-    "nuxt-app",
-    "tauri-app"
+    "rust-server",
+    "tauri-app",
+    "nuxt-app"
   ],
   "scripts": {
-    "dev": "turbo run dev",
-    "dev:web": "turbo run dev --filter=ohmymeme-web",
+    "dev": "turbo run dev --filter=!ohmymeme-web",
+    "dev:server": "turbo run dev --filter=ohmymeme-server",
+    "dev:server:release": "turbo run dev:release --filter=ohmymeme-server",
     "dev:desktop": "turbo run dev --filter=ohmymeme-desktop",
     "dev:desktop:web": "turbo run dev:web --filter=ohmymeme-desktop",
-    "build:web": "turbo run build --filter=ohmymeme-web",
+    "build": "turbo run build --filter=!ohmymeme-web",
+    "build:server": "turbo run build --filter=ohmymeme-server",
     "build:desktop": "turbo run build --filter=ohmymeme-desktop",
-    "preview": "turbo run preview --filter=ohmymeme-web",
-    "generate": "turbo run generate --filter=ohmymeme-web",
-    "reset:dev": "node nuxt-app/scripts/reset-dev.mjs",
-    "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck"
+    "reset:dev": "node rust-server/scripts/reset-dev.mjs"
   },
   "devDependencies": {
     "turbo": "^2.5.4"

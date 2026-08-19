@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useIntersectionObserver, useMediaQuery } from "@vueuse/core";
+import { useDebounceFn, useIntersectionObserver, useMediaQuery } from "@vueuse/core";
 import { useRoute, useRouter } from "vue-router";
-import type { Meme, MemeListResponse } from "../../types";
+import type { Meme, MemeListResponse, Tag } from "../../types";
 import { useMemes } from "../../composables/useMemes";
 import { useApi } from "../../composables/useApi";
 
@@ -46,7 +46,22 @@ if (!group.value) {
   router.replace("/memes");
 }
 
-const { getMemes } = useApi();
+const { getMemes, getTags } = useApi();
+
+const searchInput = ref("")
+const effectiveQuery = ref("")
+const debouncedQuery = useDebounceFn((value: string) => {
+  effectiveQuery.value = value.trim()
+}, 300)
+
+const selectedTags = ref<string[]>([])
+const allTags = ref<Tag[]>([])
+
+getTags().then((tags) => {
+  allTags.value = tags
+}).catch(() => {
+  // 标签加载失败不影响主列表
+})
 
 const state = ref<MemeListResponse>({ items: [], total: 0, limit: pageSize.value, offset: 0 });
 const loading = ref(false);
@@ -54,19 +69,47 @@ const loadingMore = ref(false);
 
 const hasMore = computed(() => state.value.items.length < state.value.total);
 
+const isFiltering = computed(() => Boolean(effectiveQuery.value || selectedTags.value.length));
+
 async function load(reset = false) {
   if (reset) {
     loading.value = true;
   }
   try {
     const offset = reset ? 0 : state.value.items.length;
-    const data = await getMemes(groupId.value, pageSize.value, offset);
+    const data = await getMemes(groupId.value, pageSize.value, offset, {
+      q: effectiveQuery.value || undefined,
+      tags: selectedTags.value.length ? selectedTags.value : undefined
+    });
     state.value = { ...data, items: reset ? data.items : [...state.value.items, ...data.items] };
   } catch (error) {
     console.error("[memes] 加载表情失败", error);
   } finally {
     loading.value = false;
   }
+}
+
+watch(searchInput, (value) => {
+  debouncedQuery(value)
+})
+
+watch([effectiveQuery, selectedTags], () => {
+  state.value = { items: [], total: 0, limit: pageSize.value, offset: 0 };
+  load(true);
+})
+
+function toggleTag(tag: string) {
+  if (selectedTags.value.includes(tag)) {
+    selectedTags.value = selectedTags.value.filter(t => t !== tag)
+  } else {
+    selectedTags.value = [...selectedTags.value, tag]
+  }
+}
+
+function clearFilters() {
+  searchInput.value = ""
+  effectiveQuery.value = ""
+  selectedTags.value = []
 }
 
 watch(groupId, () => {
@@ -80,6 +123,15 @@ watch(pageSize, () => {
 
 watch(revision, () => {
   load(true);
+});
+
+// 标签变更（增删标签/上传）后刷新标签聚合，保证筛选条实时反映
+watch(revision, () => {
+  getTags().then((tags) => {
+    allTags.value = tags
+  }).catch(() => {
+    // 忽略
+  })
 });
 
 await load(true);
@@ -140,6 +192,7 @@ function exitSelection() {
     <template #header>
       <UDashboardNavbar :title="group?.name ?? '分组'" :toggle="false" :ui="{ right: 'gap-3' }">
         <template #leading>
+          <UDashboardSidebarToggle class="desktop-sidebar-toggle" />
           <UDashboardSidebarCollapse class="desktop-sidebar-collapse" />
         </template>
 
@@ -160,6 +213,52 @@ function exitSelection() {
     </template>
 
     <template #body>
+      <div class="mb-4 flex flex-col gap-2">
+        <UInput
+          v-model="searchInput"
+          icon="i-lucide-search"
+          placeholder="搜索名称或标签（在当前分组内）"
+          class="w-full"
+        >
+          <template #trailing>
+            <button
+              v-if="searchInput"
+              type="button"
+              class="text-muted transition-colors hover:text-highlighted"
+              aria-label="清除搜索"
+              @click="searchInput = ''"
+            >
+              <UIcon name="i-lucide-x" class="size-4" />
+            </button>
+          </template>
+        </UInput>
+        <div v-if="allTags.length" class="flex flex-wrap items-center gap-1.5">
+          <span class="text-xs text-muted">标签：</span>
+          <button
+            v-for="tag in allTags"
+            :key="tag.name"
+            type="button"
+            class="rounded-full px-2.5 py-1 text-xs ring-1 transition-colors"
+            :class="selectedTags.includes(tag.name)
+              ? 'bg-primary text-white ring-primary'
+              : 'bg-elevated text-muted ring-default hover:text-highlighted'"
+            @click="toggleTag(tag.name)"
+          >
+            #{{ tag.name }}
+            <span class="opacity-70">({{ tag.count }})</span>
+          </button>
+          <UButton
+            v-if="selectedTags.length || effectiveQuery"
+            label="清除筛选"
+            icon="i-lucide-x"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="clearFilters"
+          />
+        </div>
+      </div>
+
       <div v-if="items.length" class="flex flex-col gap-4">
         <BatchActionBar
           v-if="selecting"
@@ -214,15 +313,32 @@ function exitSelection() {
       <div v-else class="flex flex-col items-center justify-center gap-4 py-24 text-center">
         <div class="flex size-16 items-center justify-center rounded-2xl bg-elevated text-dimmed">
           <UIcon v-if="loading" name="i-lucide-loader-circle" class="size-8 animate-spin" />
+          <UIcon v-else-if="isFiltering" name="i-lucide-search-x" class="size-8" />
           <UIcon v-else name="i-lucide-image-off" class="size-8" />
         </div>
         <div v-if="!loading">
-          <p class="text-sm font-medium text-highlighted">
+          <p v-if="isFiltering" class="text-sm font-medium text-highlighted">
+            没有匹配的表情
+          </p>
+          <p v-else class="text-sm font-medium text-highlighted">
             {{ isFavorites ? '还没有收藏的表情' : isRecent ? '还没有最近使用的表情' : '该分组暂无表情' }}
           </p>
-          <p class="mt-1 text-sm text-muted">
+          <p v-if="isFiltering" class="mt-1 text-sm text-muted">
+            试试更换关键词或减少标签筛选
+          </p>
+          <p v-else class="mt-1 text-sm text-muted">
             {{ isFavorites ? '点击表情卡片左上角的星标即可收藏' : isRecent ? '点击表情复制后会自动出现在这里' : '点击右上角「上传表情」添加' }}
           </p>
+          <UButton
+            v-if="isFiltering"
+            label="清除筛选"
+            icon="i-lucide-x"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            class="mt-2"
+            @click="clearFilters"
+          />
         </div>
       </div>
     </template>

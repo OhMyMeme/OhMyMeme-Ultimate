@@ -29,51 +29,44 @@ const _useMemes = () => {
     return groups.value.find(group => group.id === id);
   }
 
-  async function createGroup(name: string) {
-    const group = await api.createGroup(name);
-    await refresh();
+  /** 主操作成功后附带刷新分组；刷新失败不影响主操作的成功结果（revision 照常触发列表重载） */
+  async function refreshAfter(action: () => Promise<unknown>) {
+    const result = await action();
     revision.value++;
-    return group;
-  }
-
-  async function renameGroup(id: string, name: string) {
-    const group = await api.renameGroup(id, name);
-    await refresh();
-    revision.value++;
-    return group;
-  }
-
-  async function deleteGroup(id: string) {
-    await api.deleteGroup(id);
-    await refresh();
-    revision.value++;
-  }
-
-  async function updateMeme(id: string, data: { name?: string, groupId?: string, favorite?: boolean }) {
-    const meme = await api.updateMeme(id, data);
-    await refresh();
-    revision.value++;
-    return meme;
-  }
-
-  async function toggleFavorite(id: string, favorite: boolean) {
-    const meme = await api.updateMeme(id, { favorite });
-    await refresh();
-    revision.value++;
-    return meme;
-  }
-
-  async function deleteMeme(id: string) {
-    await api.deleteMeme(id);
-    await refresh();
-    revision.value++;
-  }
-
-  async function batchMemes(ids: string[], action: "move" | "delete", groupId?: string) {
-    const result = await api.batchMemes(ids, action, groupId);
-    await refresh();
-    revision.value++;
+    try {
+      await refresh();
+    } catch (error) {
+      console.error("[memes] 刷新分组失败", error);
+    }
     return result;
+  }
+
+  function createGroup(name: string) {
+    return refreshAfter(() => api.createGroup(name));
+  }
+
+  function renameGroup(id: string, name: string) {
+    return refreshAfter(() => api.renameGroup(id, name));
+  }
+
+  function deleteGroup(id: string) {
+    return refreshAfter(() => api.deleteGroup(id));
+  }
+
+  function updateMeme(id: string, data: { name?: string, groupId?: string, favorite?: boolean, tags?: string[] }) {
+    return refreshAfter(() => api.updateMeme(id, data));
+  }
+
+  function toggleFavorite(id: string, favorite: boolean) {
+    return refreshAfter(() => api.updateMeme(id, { favorite }));
+  }
+
+  function deleteMeme(id: string) {
+    return refreshAfter(() => api.deleteMeme(id));
+  }
+
+  function batchMemes(ids: string[], action: "move" | "delete", groupId?: string) {
+    return refreshAfter(() => api.batchMemes(ids, action, groupId));
   }
 
   return {

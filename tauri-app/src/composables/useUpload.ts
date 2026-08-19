@@ -108,33 +108,45 @@ export function useUpload(groupId: Ref<string>, onDone: () => Promise<void>) {
 
   function uploadBatch(batch: UploadFile[], onProgress: (loaded: number) => void): Promise<UploadBatchResult> {
     return new Promise((resolve, reject) => {
-      const form = new FormData();
-      form.append("groupId", groupId.value);
-      batch.forEach(({ file }) => form.append("files", file));
+      const attempt = (retried: boolean) => {
+        const form = new FormData();
+        form.append("groupId", groupId.value);
+        batch.forEach(({ file }) => form.append("files", file));
 
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", resolveUrl("/api/memes"));
-      if (sessionToken.value) {
-        xhr.setRequestHeader("Authorization", `Bearer ${sessionToken.value}`);
-      }
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          onProgress(event.loaded);
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", resolveUrl("/api/memes"));
+        if (sessionToken.value) {
+          xhr.setRequestHeader("Authorization", `Bearer ${sessionToken.value}`);
         }
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(JSON.parse(xhr.responseText) as UploadBatchResult);
-          } catch {
-            resolve({ results: [] });
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            onProgress(event.loaded);
           }
-        } else {
-          reject(new Error(extractXhrError(xhr)));
-        }
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText) as UploadBatchResult);
+            } catch {
+              resolve({ results: [] });
+            }
+          } else if (xhr.status === 0 && !retried) {
+            // 网络层失败（连接未建立/被中断）：自动重试一次，避免首次上传偶发失败需手动重传
+            setTimeout(() => attempt(true), 400);
+          } else {
+            reject(new Error(extractXhrError(xhr)));
+          }
+        };
+        xhr.onerror = () => {
+          if (!retried) {
+            setTimeout(() => attempt(true), 400);
+          } else {
+            reject(new Error("网络错误，请检查服务器连接"));
+          }
+        };
+        xhr.send(form);
       };
-      xhr.onerror = () => reject(new Error("网络错误，请检查服务器连接"));
-      xhr.send(form);
+      attempt(false);
     });
   }
 

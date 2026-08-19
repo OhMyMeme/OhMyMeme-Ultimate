@@ -1,6 +1,27 @@
 const HEARTBEAT_INTERVAL = 30 * 1000
 
-const heartbeats = new Map<object, ReturnType<typeof setInterval>>()
+interface RealtimePeer {
+  send: (data: string) => unknown
+}
+
+const heartbeats = new Map<RealtimePeer, ReturnType<typeof setInterval>>()
+
+function removePeer(peer: RealtimePeer) {
+  removeRealtimePeer(peer)
+  const timer = heartbeats.get(peer)
+  if (timer) {
+    clearInterval(timer)
+    heartbeats.delete(peer)
+  }
+}
+
+function sendToPeer(peer: RealtimePeer, message: string) {
+  try {
+    Promise.resolve(peer.send(message)).catch(() => removePeer(peer))
+  } catch {
+    removePeer(peer)
+  }
+}
 
 export default defineWebSocketHandler({
   async upgrade(request) {
@@ -11,33 +32,24 @@ export default defineWebSocketHandler({
 
   open(peer) {
     addRealtimePeer(peer)
-    try {
-      peer.send(JSON.stringify({ type: 'sync', revision: getRealtimeRevision() }))
-    } catch {
-      // ignore send errors on freshly opened connections
-    }
+    sendToPeer(peer, JSON.stringify({ type: 'sync', revision: getRealtimeRevision() }))
     const timer = setInterval(() => {
-      try {
-        peer.send('ping')
-      } catch {
-        // ignore send errors on stale connections
-      }
+      sendToPeer(peer, 'ping')
     }, HEARTBEAT_INTERVAL)
     heartbeats.set(peer, timer)
   },
 
   close(peer) {
-    removeRealtimePeer(peer)
-    const timer = heartbeats.get(peer)
-    if (timer) {
-      clearInterval(timer)
-      heartbeats.delete(peer)
-    }
+    removePeer(peer)
+  },
+
+  error(peer) {
+    removePeer(peer)
   },
 
   message(peer, message) {
     if (message.text() === 'ping') {
-      peer.send('pong')
+      sendToPeer(peer, 'pong')
     }
   }
 })

@@ -40,29 +40,27 @@ async function onSubmit() {
 </script>
 
 <template>
-  <UModal v-model:open="open" :title="props.mode === 'rename' ? '重命名分组' : '新建分组'">
+  <AppModal v-model:open="open" :title="props.mode === 'rename' ? '重命名分组' : '新建分组'">
     <template #body>
       <UFormField label="分组名称" required>
-        <UInput v-model="name" placeholder="输入分组名称" />
+        <UInput v-model="name" placeholder="输入分组名称" class="w-full" />
       </UFormField>
     </template>
 
     <template #footer>
-      <div class="flex justify-end gap-2">
-        <UButton
-          label="取消"
-          color="neutral"
-          variant="ghost"
-          @click="open = false"
-        />
-        <UButton
-          label="确定"
-          color="primary"
-          :loading="pending"
-          :disabled="!name.trim()"
-          @click="onSubmit"
-        />
-      </div>
+      <UButton
+        label="取消"
+        color="neutral"
+        variant="ghost"
+        @click="open = false"
+      />
+      <UButton
+        label="确定"
+        color="primary"
+        :loading="pending"
+        :disabled="!name.trim()"
+        @click="onSubmit"
+      />
     </template>
-  </UModal>
+  </AppModal>
 </template>

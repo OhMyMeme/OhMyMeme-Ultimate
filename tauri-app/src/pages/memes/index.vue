@@ -11,6 +11,7 @@ await memes.refresh();
     <template #header>
       <UDashboardNavbar title="表情库" :toggle="false" :ui="{ right: 'gap-3' }">
         <template #leading>
+          <UDashboardSidebarToggle class="desktop-sidebar-toggle" />
           <UDashboardSidebarCollapse class="desktop-sidebar-collapse" />
         </template>
 

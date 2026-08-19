@@ -2,11 +2,19 @@
 @import "@nuxt/ui";
 
 @theme static {
-  --font-sans: 'Public Sans', sans-serif;
+  --font-sans: 'Open Sans', 'Poppins', ui-sans-serif, system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: 'Poppins', 'Open Sans', ui-sans-serif, system-ui, sans-serif;
 }
 
 html {
-  background-color: #ffffff;
+  background-color: var(--ui-bg, var(--ohmymeme-bg));
 }
 
 @media (min-width: 1600px) {
@@ -33,35 +41,35 @@ html {
   }
 }
 
-html.dark {
-  background-color: #18181b;
-}
-
-.min-h-svh {
+html.platform-windows .min-h-svh {
   min-height: calc(100svh - 2.25rem);
 }
 
 @media (max-width: 1023px) {
-  .desktop-sidebar-collapse {
+  html.platform-windows .desktop-sidebar-toggle {
+    display: none !important;
+  }
+
+  html.platform-windows .desktop-sidebar-collapse {
     display: flex !important;
   }
 
-  .desktop-sidebar {
+  html.platform-windows .desktop-sidebar {
     display: flex !important;
     width: 17.5rem !important;
     min-width: 17.5rem !important;
   }
 
-  .desktop-sidebar[data-collapsed="true"] {
+  html.platform-windows .desktop-sidebar[data-collapsed="true"] {
     display: none !important;
   }
 
-  .meme-grid {
+  html.platform-windows .meme-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     width: 100%;
   }
 
-  .desktop-sidebar-is-collapsed .meme-grid {
+  html.platform-windows .desktop-sidebar-is-collapsed .meme-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }

@@ -13,6 +13,7 @@ const { pending, run } = useAsyncAction()
 const renameOpen = ref(false)
 const moveOpen = ref(false)
 const deleteOpen = ref(false)
+const tagsOpen = ref(false)
 const name = ref('')
 const targetGroupId = ref('')
 
@@ -34,6 +35,7 @@ watch(moveOpen, (value) => {
 
 const items = computed<DropdownMenuItem[][]>(() => [[
   { label: '重命名', icon: 'i-lucide-pencil', onSelect: () => { renameOpen.value = true } },
+  { label: '标签', icon: 'i-lucide-tag', onSelect: () => { tagsOpen.value = true } },
   { label: '移动', icon: 'i-lucide-arrow-right-left', onSelect: () => { moveOpen.value = true } },
   { label: '删除', icon: 'i-lucide-trash', color: 'error', onSelect: () => { deleteOpen.value = true } }
 ]])
@@ -76,85 +78,81 @@ async function onDelete() {
     />
   </UDropdownMenu>
 
-  <UModal v-model:open="renameOpen" title="重命名表情">
+  <AppModal v-model:open="renameOpen" title="重命名表情">
     <template #body>
-      <UFormField label="名称" required>
-        <UInput v-model="name" placeholder="输入名称" />
-      </UFormField>
+      <UInput v-model="name" placeholder="输入名称" aria-label="名称" autofocus class="w-full" />
     </template>
     <template #footer>
-      <div class="flex justify-end gap-2">
-        <UButton
-          label="取消"
-          color="neutral"
-          variant="ghost"
-          @click="renameOpen = false"
-        />
-        <UButton
-          label="确定"
-          color="primary"
-          :loading="pending"
-          :disabled="!name.trim()"
-          @click="onRename"
-        />
-      </div>
+      <UButton
+        label="取消"
+        color="neutral"
+        variant="ghost"
+        @click="renameOpen = false"
+      />
+      <UButton
+        label="确定"
+        color="primary"
+        :loading="pending"
+        :disabled="!name.trim()"
+        @click="onRename"
+      />
     </template>
-  </UModal>
+  </AppModal>
 
-  <UModal v-model:open="moveOpen" title="移动表情">
+  <AppModal v-model:open="moveOpen" title="移动表情">
     <template #body>
-      <UFormField v-if="groupOptions.length" label="移动到分组">
+      <div v-if="groupOptions.length" class="flex items-center justify-between gap-3">
+        <span class="shrink-0 text-sm text-highlighted">移动到分组</span>
         <USelectMenu
           v-model="targetGroupId"
           value-key="value"
           label-key="label"
           :items="groupOptions"
+          class="min-w-0 flex-1"
         />
-      </UFormField>
+      </div>
       <p v-else class="text-sm text-muted">
         暂无其他分组可移动
       </p>
     </template>
     <template #footer>
-      <div class="flex justify-end gap-2">
-        <UButton
-          label="取消"
-          color="neutral"
-          variant="ghost"
-          @click="moveOpen = false"
-        />
-        <UButton
-          label="移动"
-          color="primary"
-          :loading="pending"
-          :disabled="!targetGroupId"
-          @click="onMove"
-        />
-      </div>
+      <UButton
+        label="取消"
+        color="neutral"
+        variant="ghost"
+        @click="moveOpen = false"
+      />
+      <UButton
+        label="移动"
+        color="primary"
+        :loading="pending"
+        :disabled="!targetGroupId"
+        @click="onMove"
+      />
     </template>
-  </UModal>
+  </AppModal>
 
-  <UModal v-model:open="deleteOpen" title="删除表情">
+  <TagEditorModal v-model:open="tagsOpen" :meme="props.meme" />
+
+  <AppModal v-model:open="deleteOpen" title="删除表情">
     <template #body>
-      <p class="text-sm text-muted">
+      <p class="text-center text-sm text-muted">
         确定删除该表情吗？此操作不可恢复。
       </p>
     </template>
     <template #footer>
-      <div class="flex justify-end gap-2">
-        <UButton
-          label="取消"
-          color="neutral"
-          variant="ghost"
-          @click="deleteOpen = false"
-        />
-        <UButton
-          label="删除"
-          color="error"
-          :loading="pending"
-          @click="onDelete"
-        />
-      </div>
+      <UButton
+        label="取消"
+        color="neutral"
+        variant="ghost"
+        @click="deleteOpen = false"
+      />
+      <UButton
+        label="删除"
+        color="error"
+        :loading="pending"
+        @click="onDelete"
+      />
     </template>
-  </UModal>
+  </AppModal>
 </template>

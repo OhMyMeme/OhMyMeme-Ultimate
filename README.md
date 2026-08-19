@@ -17,7 +17,21 @@
 
 ## 快速开始
 
-> 需要：Node.js ≥ 20、MongoDB（本地安装或使用 [Atlas](https://www.mongodb.com/atlas)）
+> 需要：MongoDB（本地安装或使用 [Atlas](https://www.mongodb.com/atlas)）。后端有两种实现，任选其一：
+
+**方式 A：Rust 后端（推荐，当前服务端契约的权威实现）**
+
+> 需要：Rust 工具链（rustup 安装 stable 即可）；若系统 schannel TLS 不可用，cargo 需使用 `rust-server/vendor/` 离线构建（见 `rust-server/README.md`）。
+
+```bash
+npm run dev:server   # 仅 Rust 后端（turbo 编排 cargo run，监听 http://0.0.0.0:3000）
+# 或直接：
+cd rust-server
+cp .env.example .env   # 编辑填写 ACCESS_TOKEN（访问密钥）、MONGO_URI
+cargo run              # 后端监听 http://0.0.0.0:3000
+```
+
+**方式 B：Nuxt 后端（原实现，保留作对照参考）**
 
 ```bash
 npm install
@@ -25,27 +39,29 @@ cp nuxt-app/.env.example nuxt-app/.env   # 编辑填写三个必填项
 npm run dev
 ```
 
-启动后打开浏览器访问 `http://localhost:3000`，输入访问密钥即可开始使用。
+启动后端后，浏览器访问 `http://localhost:3000` 输入访问密钥即可使用；桌面客户端在连接页填入后端地址（默认 `http://localhost:3000`）。
 
 ## 下载安装
 
 不想从源码运行？到 [Releases](https://github.com/OhMyMeme/OhMyMeme-Ultimate/releases) 下载最新版本：
 
 - **Windows 桌面客户端**：下载 `.exe` 安装包，双击安装
-- **Web 服务包**：下载 `.zip` 或 `.tar.gz`，解压后按包内说明配置运行
+- **服务端包**：下载 `.zip` 或 `.tar.gz`，解压后按包内说明配置运行（内含 Rust 后端二进制 + 启动脚本 + 配置模板，需自行准备好 MongoDB）
 
 ## 环境变量
 
-首次运行前，在包根目录创建 `.env` 文件（参考 `.env.example`），填写以下变量：
+**Rust 后端**（`rust-server/.env`，见 `rust-server/.env.example`）：
 
 | 变量 | 说明 | 默认 |
 | --- | --- | --- |
-| `NUXT_MONGOOSE_URI` | MongoDB 连接地址（必填） | `mongodb://localhost:27017/ohmymeme` |
-| `NUXT_ACCESS_TOKEN` | 登录访问密钥（必填） | — |
-| `NUXT_SESSION_PASSWORD` | 会话签名密钥（必填，≥32 字符） | — |
+| `MONGO_URI` | MongoDB 连接地址（必填） | `mongodb://localhost:27017/ohmymeme` |
+| `ACCESS_TOKEN` | 登录访问密钥（必填） | — |
 | `PORT` / `HOST` | 监听端口 / 地址 | `3000` / `0.0.0.0` |
-| `NUXT_ALLOWED_ORIGINS` | 允许的跨域来源（逗号分隔） | 同源 + 桌面端 |
-| `NUXT_STORAGE_LOCAL_DIR` | 表情文件存储目录 | `.data/uploads/memes` |
+| `ALLOWED_ORIGINS` | 允许的跨域来源（逗号分隔） | 同源 + 桌面端 |
+| `STORAGE_LOCAL_DIR` | 表情文件存储目录 | `.data/uploads/memes` |
+| `WEB_ENABLED` | 是否开放 Web 页面（默认关闭，仅 API/WS） | `false` |
+
+**Nuxt 后端**（`nuxt-app/.env`，保留作对照）：`NUXT_MONGOOSE_URI` / `NUXT_ACCESS_TOKEN` / `NUXT_SESSION_PASSWORD` 等（见 `nuxt-app/.env.example`）。
 
 ## 限制
 

@@ -38,28 +38,26 @@ async function onDelete() {
 
   <GroupFormModal v-model:open="renameOpen" mode="rename" :group="group" />
 
-  <UModal v-model:open="deleteOpen" title="删除分组">
+  <AppModal v-model:open="deleteOpen" title="删除分组">
     <template #body>
-      <p class="text-sm text-muted">
+      <p class="text-center text-sm text-muted">
         确定删除分组「{{ group.name }}」吗？
       </p>
     </template>
 
     <template #footer>
-      <div class="flex justify-end gap-2">
-        <UButton
-          label="取消"
-          color="neutral"
-          variant="ghost"
-          @click="deleteOpen = false"
-        />
-        <UButton
-          label="删除"
-          color="error"
-          :loading="deleting"
-          @click="onDelete"
-        />
-      </div>
+      <UButton
+        label="取消"
+        color="neutral"
+        variant="ghost"
+        @click="deleteOpen = false"
+      />
+      <UButton
+        label="删除"
+        color="error"
+        :loading="deleting"
+        @click="onDelete"
+      />
     </template>
-  </UModal>
+  </AppModal>
 </template>

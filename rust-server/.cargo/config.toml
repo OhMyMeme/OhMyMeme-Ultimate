@@ -1,0 +1,10 @@
+# Vendored offline build (crates pre-downloaded into ./vendor).
+# Regenerate vendor after Cargo.toml changes:
+#   node scripts/sparse-mirror.js 7898  (background)
+#   cargo generate-lockfile
+#   node scripts/vendor-download.js
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"

@@ -5,7 +5,7 @@ import { useServer } from "./useServer";
 export type HeartbeatStatus = "idle" | "checking" | "online" | "offline"
 
 const ONLINE_INTERVAL = 15 * 1000
-const OFFLINE_INTERVAL = 3 * 1000
+const OFFLINE_INTERVAL = 30 * 1000
 const TIMEOUT = 5 * 1000
 
 const _useHeartbeat = () => {
@@ -27,8 +27,8 @@ const _useHeartbeat = () => {
     if (!running) {
       return;
     }
-    const delay = status.value === "offline" ? OFFLINE_INTERVAL : ONLINE_INTERVAL;
-    timer = setTimeout(check, delay);
+    // 宕机后按更长间隔继续探测，以便服务器恢复后自动回到在线（disconnected 页承诺的自动恢复）
+    timer = setTimeout(check, status.value === "offline" ? OFFLINE_INTERVAL : ONLINE_INTERVAL);
   }
 
   async function check() {

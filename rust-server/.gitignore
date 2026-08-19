@@ -1,0 +1,16 @@
+# Rust server build artifacts
+target/
+vendor/
+
+# Local test files
+.tmp/
+cargo-build.log
+
+# Local data dir (uploaded files when running locally)
+.data/
+
+# Local env file (dotless variant; root .gitignore only covers .env*)
+/env
+
+# npm workspace artifacts (rust-server is also an npm workspace for turbo orchestration)
+node_modules/

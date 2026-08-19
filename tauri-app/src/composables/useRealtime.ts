@@ -25,7 +25,10 @@ export function useRealtime() {
   const { status, open, close } = useWebSocket(url, {
     immediate: false,
     autoConnect: false,
-    autoReconnect: { retries: Infinity, delay: 2000 },
+    autoReconnect: {
+      retries: Infinity,
+      delay: (retry) => Math.min(2000 * 2 ** retry, 30000)
+    },
     onMessage: (_ws, event) => {
       try {
         const message = JSON.parse(event.data);

@@ -57,10 +57,22 @@ async function onToggleFavorite() {
       class="aspect-square w-full object-cover"
     >
 
-    <div class="flex items-center gap-2 p-2">
+    <div class="flex flex-col gap-1 p-2">
       <span class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">
         {{ meme.name }}
       </span>
+      <div v-if="meme.tags?.length" class="flex min-w-0 flex-wrap gap-1">
+        <span
+          v-for="tag in meme.tags.slice(0, 3)"
+          :key="tag"
+          class="truncate rounded-full bg-elevated px-1.5 py-0.5 text-[10px] text-muted ring-1 ring-default"
+        >
+          #{{ tag }}
+        </span>
+        <span v-if="meme.tags.length > 3" class="rounded-full bg-elevated px-1.5 py-0.5 text-[10px] text-muted ring-1 ring-default">
+          +{{ meme.tags.length - 3 }}
+        </span>
+      </div>
     </div>
 
     <div v-if="selectable" class="absolute left-2 top-2">

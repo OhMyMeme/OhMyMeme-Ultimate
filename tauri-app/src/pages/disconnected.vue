@@ -75,7 +75,7 @@ const lastOnlineText = computed(() => lastOnlineAt.value ? lastOnlineAt.value.to
             @click="router.push('/settings')"
           />
           <p class="text-center text-xs text-dimmed">
-            应用每 3 秒自动重试，服务器恢复后将自动返回
+            应用每 30 秒自动探测，服务器恢复后将自动返回；也可点击「立即重试」
           </p>
         </div>
       </template>

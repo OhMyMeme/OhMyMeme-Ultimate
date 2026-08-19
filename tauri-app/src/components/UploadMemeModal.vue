@@ -46,11 +46,12 @@ async function onSubmit() {
 </script>
 
 <template>
-  <UModal
+  <AppModal
     v-model:open="open"
     title="上传表情"
     :dismissible="!upload.uploading"
-    :close="!upload.uploading"
+    :closeable="!upload.uploading"
+    width-class="w-[28rem]"
   >
     <template #body>
       <div v-if="upload.uploading" class="flex flex-col gap-3 py-6">
@@ -167,7 +168,7 @@ async function onSubmit() {
     </template>
 
     <template #footer>
-      <div v-if="!upload.uploading" class="flex justify-end gap-2">
+      <template v-if="!upload.uploading">
         <UButton
           label="取消"
           color="neutral"
@@ -188,7 +189,7 @@ async function onSubmit() {
           :disabled="!upload.uploadableCount || !groupId"
           @click="onSubmit"
         />
-      </div>
+      </template>
     </template>
-  </UModal>
+  </AppModal>
 </template>

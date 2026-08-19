@@ -18,8 +18,13 @@ export default defineConfig(async () => ({
     ui({
       ui: {
         colors: {
-          primary: "green",
-          neutral: "zinc"
+          primary: "rose",
+          secondary: "blue",
+          success: "green",
+          info: "blue",
+          warning: "amber",
+          error: "red",
+          neutral: "slate"
         }
       }
     })
@@ -29,7 +34,7 @@ export default defineConfig(async () => ({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    host: host || "127.0.0.1",
     hmr: host
       ? {
           protocol: "ws",

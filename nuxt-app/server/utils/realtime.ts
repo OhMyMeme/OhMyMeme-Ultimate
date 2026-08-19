@@ -1,10 +1,18 @@
 interface RealtimePeer {
-  send: (data: string) => void
+  send: (data: string) => unknown
 }
 
 const peers = new Set<RealtimePeer>()
 
 let revision = 0
+
+function sendToPeer(peer: RealtimePeer, message: string, onError: () => void) {
+  try {
+    Promise.resolve(peer.send(message)).catch(onError)
+  } catch {
+    onError()
+  }
+}
 
 export function getRealtimeRevision(): number {
   return revision
@@ -29,10 +37,6 @@ export function broadcastRealtime(type: string, payload?: unknown) {
   }
   const message = JSON.stringify({ type, revision, payload })
   for (const peer of peers) {
-    try {
-      peer.send(message)
-    } catch {
-      removeRealtimePeer(peer)
-    }
+    sendToPeer(peer, message, () => removeRealtimePeer(peer))
   }
 }

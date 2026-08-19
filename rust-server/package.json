@@ -1,0 +1,13 @@
+{
+  "name": "ohmymeme-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rust backend (axum + MongoDB) — current authoritative server implementation",
+  "scripts": {
+    "dev": "cargo run",
+    "dev:release": "cargo run --release",
+    "build": "cargo build --release --offline",
+    "typecheck": "cargo build --offline",
+    "reset:dev": "node scripts/reset-dev.mjs"
+  }
+}

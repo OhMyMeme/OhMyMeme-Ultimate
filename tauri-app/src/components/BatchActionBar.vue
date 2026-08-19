@@ -87,60 +87,58 @@ async function onDelete() {
     />
   </div>
 
-  <UModal v-model:open="moveOpen" title="批量移动">
+  <AppModal v-model:open="moveOpen" title="批量移动">
     <template #body>
-      <UFormField v-if="groupOptions.length" label="移动到分组">
+      <div v-if="groupOptions.length" class="flex items-center justify-between gap-3">
+        <span class="shrink-0 text-sm text-highlighted">移动到分组</span>
         <USelectMenu
           v-model="targetGroupId"
           value-key="value"
           label-key="label"
           :items="groupOptions"
+          class="min-w-0 flex-1"
         />
-      </UFormField>
+      </div>
       <p v-else class="text-sm text-muted">
         暂无其他分组可移动
       </p>
     </template>
     <template #footer>
-      <div class="flex justify-end gap-2">
-        <UButton
-          label="取消"
-          color="neutral"
-          variant="ghost"
-          @click="moveOpen = false"
-        />
-        <UButton
-          label="移动"
-          color="primary"
-          :loading="pending"
-          :disabled="!targetGroupId"
-          @click="onMove"
-        />
-      </div>
+      <UButton
+        label="取消"
+        color="neutral"
+        variant="ghost"
+        @click="moveOpen = false"
+      />
+      <UButton
+        label="移动"
+        color="primary"
+        :loading="pending"
+        :disabled="!targetGroupId"
+        @click="onMove"
+      />
     </template>
-  </UModal>
+  </AppModal>
 
-  <UModal v-model:open="deleteOpen" title="批量删除">
+  <AppModal v-model:open="deleteOpen" title="批量删除">
     <template #body>
-      <p class="text-sm text-muted">
+      <p class="text-center text-sm text-muted">
         确定删除选中的 {{ ids.length }} 个表情吗？此操作不可恢复。
       </p>
     </template>
     <template #footer>
-      <div class="flex justify-end gap-2">
-        <UButton
-          label="取消"
-          color="neutral"
-          variant="ghost"
-          @click="deleteOpen = false"
-        />
-        <UButton
-          label="删除"
-          color="error"
-          :loading="pending"
-          @click="onDelete"
-        />
-      </div>
+      <UButton
+        label="取消"
+        color="neutral"
+        variant="ghost"
+        @click="deleteOpen = false"
+      />
+      <UButton
+        label="删除"
+        color="error"
+        :loading="pending"
+        @click="onDelete"
+      />
     </template>
-  </UModal>
+  </AppModal>
 </template>
