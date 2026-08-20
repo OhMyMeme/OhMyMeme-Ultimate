@@ -22,10 +22,14 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # 离线构建依赖仓库内 rust-server/vendor/（.cargo/config.toml 已替换 crates-io 源）
-      - name: Build server (release, offline)
+      # CI（ubuntu）有网络，在线构建即可；本地 Windows 无 TLS 时才用 vendor 离线构建
+      # （rust-server/.cargo/config.toml 把 crates-io 替换为本地 vendor 目录，vendor 不入库，
+      #   故 CI 上必须先移除该配置，否则 cargo 会尝试从 checkout 中不存在的 vendor 拉依赖）
+      - name: Build server (release)
         working-directory: rust-server
-        run: cargo build --release --offline
+        run: |
+          rm -f .cargo/config.toml
+          cargo build --release
 
       - name: Assemble release folder
         working-directory: rust-server
