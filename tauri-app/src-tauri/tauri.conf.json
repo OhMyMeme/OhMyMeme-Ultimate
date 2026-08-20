@@ -27,7 +27,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUxREYxM0JBRDQ5OEI5NTMKUldSVHVaalV1aFBmNGYya0UvcG4xcWE5MkZDOTVxbXJ6NW5DMFNHaU5BNkI4cW1DSGEvN1ZLQnMK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlGMTE4QzhGQTM5MDJGNzEKUldSeEw1Q2pqNHdSbnc0cU5YcnJNYUdZOXBQVUdUVkFvNHA0Mk96Sm5LMCt6Y1VPMUxZRzhIRysK",
       "endpoints": ["https://github.com/OhMyMeme/OhMyMeme-Ultimate/releases/latest/download/latest.json"],
       "windows": {
         "installMode": "basicUi"

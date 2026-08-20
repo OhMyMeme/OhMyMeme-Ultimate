@@ -97,11 +97,9 @@ jobs:
           if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw "缺少 secrets.TAURI_SIGNING_PRIVATE_KEY" }
           $installerPath = $installer.FullName
 
-          # 私钥内容写入临时文件（不入库、不随产物上传），
-          # sign 用 -f/--private-key-path 指向该文件（-w 是 generate 的参数，sign 不接受）
-          $privateKeyFile = Join-Path $env:RUNNER_TEMP "ohmymeme-private.key"
-          Set-Content -Path $privateKeyFile -Value $env:TAURI_SIGNING_PRIVATE_KEY -NoNewline
-          $sig = (npx --no-install tauri signer sign -f $privateKeyFile $installerPath | Out-String).Trim()
+          # 私钥与密码已由 job 级 env 注入（TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD），
+          # signer sign 会自动读取；stdout 含提示行/说明行，只取 base64 签名行
+          $sig = ((npx --no-install tauri signer sign $installerPath 2>$null | Where-Object { $_ -match '^[A-Za-z0-9+/]+={0,2}$' }) | Out-String).Trim()
           if (-not $sig) { throw "tauri signer sign 未输出签名" }
 
           $tauriConfig = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
