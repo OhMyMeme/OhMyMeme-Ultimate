@@ -69,6 +69,32 @@ ACCESS_TOKEN=<你的访问密钥> cargo run --release
 > cargo build --offline
 > ```
 
+## 桌面端自动更新
+
+桌面端（`tauri-app`）已接入 **tauri-plugin-updater v2** 自动更新。**更新清单（`latest.json`）与安装包均由 GitHub Release 托管**，桌面端 `tauri.conf.json` 的 `plugins.updater.endpoints` 直连：
+
+```
+https://github.com/<owner>/<repo>/releases/latest/download/latest.json
+```
+
+更新分发**不依赖 rust-server 新增任何端点**——本服务仅提供业务 API，不参与更新托管。
+
+### 发布流程要点
+
+- **minisign 签名**：发布前用 `npx tauri signer generate -w` 生成签名密钥对（公钥填入 `plugins.updater.pubkey`）；CI 以 secrets（`TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）对安装包执行 `tauri signer sign`，产出 `.sig` 签名。
+- **`latest.json` 结构**（由 `tauri-app/scripts/make-update-manifest.mjs` 生成）：
+
+| 字段 | 要求 |
+| --- | --- |
+| `version` | 与 `tauri.conf.json` 的 `version` 一致，**不带 `v` 前缀** |
+| `pub_date` | RFC3339 格式（如 `2025-01-01T00:00:00Z`） |
+| `platforms.windows-x86_64.signature` | minisign 签名的 **base64** 内容 |
+| `platforms.windows-x86_64.url` | 安装包的**绝对 HTTPS** 下载地址 |
+
+- **版本必须严格递增**：updater 仅当清单 `version` 高于当前应用版本时才提示更新，低于或等于当前版本会被忽略。
+
+> 如需**自托管更新**（绕过 GitHub Release），后续可在 rust-server 增加 `/update/` 静态端点托管 `latest.json` 与安装包（本次未实现）。
+
 ## 测试
 
 启动服务后（独立测试库，避免污染数据）：
@@ -93,13 +119,14 @@ MONGO_URI=mongodb://localhost:27017/ohmymeme_rust_test PORT=3100 ACCESS_TOKEN=<t
 | `GET /api/auth/status` | `{configured, authenticated}`，公开 |
 | `GET /api/groups` | 数组；排序 收藏→最近使用→未分组→自定义；每项含 `count` + `covers`（最新 4 张缩略图 URL） |
 | `POST/PATCH/DELETE /api/groups[/:id]` | 创建/改名/删除；409 重名/系统保留名、403 系统分组、409 非空删除 |
-| `GET /api/memes` | `{items, total, limit, offset}`；分页/排序/过滤；最近使用上限 50 |
-| `POST /api/memes` | multipart 多文件上传（≤50 个、单文件 ≤20MB、总请求 ≤1GB）；逐文件校验，坏文件不阻断整批；返回 `{results}` |
+| `GET /api/memes` | `{items, total, limit, offset}`；分页/排序/过滤；最近使用上限 50；未分组与自定义分组按 `sortOrder` 降序（自定义拖动顺序）再回落 `createdAt` 降序 |
+| `POST /api/memes` | multipart 多文件上传（≤20 个、单文件 ≤20MB、最长边 ≤2560px、总请求 ≤100MB）；逐文件校验，坏文件不阻断整批；返回 `{results}` |
 | `GET/PATCH/DELETE /api/memes/:id` | 单条/改名移动收藏/删除（含清理文件） |
 | `GET /api/memes/:id/file` | 原图，支持 `Range`（206/416），`cache-control: private, immutable` |
 | `GET /api/memes/:id/thumb` | 缩略图（无缩略图回退原图） |
 | `POST /api/memes/:id/use` | 记录最近使用（`usedAt`）并广播 |
 | `POST /api/memes/batch` | `{ids, action: move|delete, groupId?}` → `{moved}` / `{deleted}` |
+| `POST /api/memes/reorder` | 拖动排序：`{id, beforeId?}` 把 `id` 移到 `beforeId` 之前（`beforeId` 省略/为 null 则移到末尾）→ `{ok}`；仅未分组与自定义分组可排序，收藏/最近使用返回 400 |
 | `GET /api/overview` | `{memeCount, favoriteCount, groupCount, storageBytes}`，5s TTL 缓存 |
 | `WS /ws` | 升级鉴权（Bearer/`?token=`/Cookie）；连接即发 `{type:"sync",revision}`；30s 文本 `ping`；文本 `ping`→`pong`；变更广播 `{type, revision, payload}` |
 
@@ -111,3 +138,4 @@ MONGO_URI=mongodb://localhost:27017/ohmymeme_rust_test PORT=3100 ACCESS_TOKEN=<t
 2. **缩略图编码**：`image` crate 仅支持 WebP **lossless** 编码（原 sharp 为 quality 80 lossy）。输出仍为 256px WebP，尺寸略大，格式契约不变。
 3. **环境变量命名**：原 `NUXT_*` 前缀改为 `MONGO_URI` / `ACCESS_TOKEN` / `ALLOWED_ORIGINS` / `STORAGE_LOCAL_DIR` / `WEB_ENABLED`。
 4. **web-disabled 页面**：Rust 服务不托管静态资源，`WEB_ENABLED=false` 时非 API/WS 路径返回与原文一致的 403 提示页。
+5. **自定义拖动排序（新增）**：`Meme` 增加可选 `sortOrder`（数值越大越靠前）。历史数据无该字段，降序排序下自动排在已手工排序的表情之后，无需迁移脚本。收藏（跨分组视图）与最近使用（按 `usedAt`）保持原有固定排序语义；换组（`PATCH` / `batch move`）会清除旧的 `sortOrder`。

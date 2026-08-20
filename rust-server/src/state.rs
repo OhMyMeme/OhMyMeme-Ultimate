@@ -87,7 +87,7 @@ impl AppState {
         self.memes()
             .create_index(
                 mongodb::IndexModel::builder()
-                    .keys(doc! { "groupId": 1, "createdAt": -1 })
+                    .keys(doc! { "groupId": 1, "sortOrder": -1, "createdAt": -1 })
                     .build(),
             )
             .await?;

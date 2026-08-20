@@ -17,6 +17,44 @@ html {
   background-color: var(--ui-bg, var(--ohmymeme-bg));
 }
 
+/* Motion classes are forwarded by RouterView; routing lifecycle remains untouched. */
+.layout-motion,
+.page-motion {
+  animation: route-enter 160ms ease both;
+}
+
+@keyframes route-enter {
+  from {
+    opacity: 0;
+    /* 用整数像素而非 rem：rem 在 17/18/20/22px 根字号下会算出小数偏移，
+       动画停在小数位时 WebView2 会对文本做次像素重采样，观感同样发虚 */
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* DashboardSidebar exposes data-collapsed and --width; animate only state changes. */
+.desktop-sidebar {
+  transition: width 180ms ease, min-width 180ms ease, opacity 140ms ease;
+  /* 不要常驻 will-change / transform：那会把侧边栏永久提升为 GPU 合成层，
+     Windows WebView2 上合成层丢失 ClearType 次像素抗锯齿，导致文字发虚。
+     宽度动画由布局驱动，本身不需要合成层提示。 */
+}
+
+/* 拖拽调整宽度期间关闭过渡，并仅在此期间启用合成层提示 */
+.desktop-sidebar[data-dragging="true"] {
+  transition: none;
+  will-change: width;
+}
+
+.desktop-sidebar [data-slot="body"],
+.desktop-sidebar [data-slot="footer"] {
+  transition: opacity 120ms ease;
+}
+
 @media (min-width: 1600px) {
   html {
     font-size: 17px;
@@ -61,7 +99,18 @@ html.platform-windows .min-h-svh {
   }
 
   html.platform-windows .desktop-sidebar[data-collapsed="true"] {
-    display: none !important;
+    display: flex !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    overflow: hidden;
+    border-width: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  html.platform-windows .desktop-sidebar[data-collapsed="true"] [data-slot="body"],
+  html.platform-windows .desktop-sidebar[data-collapsed="true"] [data-slot="footer"] {
+    opacity: 0;
   }
 
   html.platform-windows .meme-grid {
@@ -76,4 +125,15 @@ html.platform-windows .min-h-svh {
 
 .dark {
   --ui-primary: var(--ui-color-primary-500);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }

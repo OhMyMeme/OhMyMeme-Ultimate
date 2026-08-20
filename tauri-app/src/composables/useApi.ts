@@ -70,6 +70,8 @@ export function useApi() {
     markUsed: (id: string) => request<Meme>(`/api/memes/${id}/use`, { method: "POST" }),
     deleteMeme: (id: string) => request<unknown>(`/api/memes/${id}`, { method: "DELETE" }),
     batchMemes: (ids: string[], action: "move" | "delete", groupId?: string) => request<BatchResult>("/api/memes/batch", { method: "POST", body: JSON.stringify({ ids, action, groupId }) }),
+    /** 拖动排序：把 id 移动到 beforeId 之前；beforeId 省略表示移到末尾 */
+    reorderMeme: (id: string, beforeId?: string) => request<{ ok: boolean }>("/api/memes/reorder", { method: "POST", body: JSON.stringify({ id, beforeId: beforeId ?? null }) }),
     getOverview: () => request<Overview>("/api/overview")
   };
 }

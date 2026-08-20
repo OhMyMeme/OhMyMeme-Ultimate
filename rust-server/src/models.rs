@@ -94,6 +94,10 @@ pub struct MemeDoc {
     pub used_at: Option<DateTime>,
     #[serde(default, rename = "createdAt")]
     pub created_at: Option<DateTime>,
+    /// 自定义拖动排序权重：数值越大越靠前；None 表示尚未参与过自定义排序。
+    /// 降序排序时 BSON 规定数字排在 null/缺失之前，因此手工排过的表情天然优先于历史数据。
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "sortOrder")]
+    pub sort_order: Option<i64>,
 }
 
 impl MemeDoc {
@@ -113,6 +117,7 @@ impl MemeDoc {
             "thumbUrl": format!("/api/memes/{}/thumb", self.id),
             "favorite": self.favorite,
             "createdAt": created,
+            "sortOrder": self.sort_order,
         })
     }
 }

@@ -4,6 +4,7 @@ import type { Meme } from "../types";
 import { useCopyMeme } from "../composables/useCopyMeme";
 import { useServer } from "../composables/useServer";
 import { useAuth } from "../composables/useAuth";
+import { useSettings } from "../composables/useSettings";
 import { useMemes } from "../composables/useMemes";
 import { useAsyncAction } from "../composables/useAsyncAction";
 
@@ -11,6 +12,8 @@ const props = defineProps<{
   meme: Meme
   selectable?: boolean
   selected?: boolean
+  /** 拖动排序模式：此时整卡可拖动，单击不再复制以免误触 */
+  reorderable?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -20,19 +23,33 @@ const emit = defineEmits<{
 const { resolveUrl } = useServer()
 const { copy } = useCopyMeme()
 const { authorizeUrl } = useAuth()
+const { gifAnimation } = useSettings()
 const { toggleFavorite } = useMemes()
 const { pending: favoritePending, run } = useAsyncAction()
 
 const src = computed(() => {
-  const preview = props.meme.mimeType === "image/gif" ? props.meme.url : (props.meme.thumbUrl || props.meme.url);
+  const isGif = props.meme.mimeType === "image/gif";
+  const preview = isGif && gifAnimation.value ? props.meme.url : (props.meme.thumbUrl || props.meme.url);
   return authorizeUrl(resolveUrl(preview));
 });
 
 function onClick() {
+  if (props.reorderable) {
+    // 拖动排序模式下不复制，避免拖完手一松就把表情复制走
+    return
+  }
   if (props.selectable) {
     emit('toggle-select')
   } else {
     copy(props.meme)
+  }
+}
+
+/** 非拖动排序模式下彻底禁止原生拖拽，避免把图片拖出去粘贴到别处 */
+function onRootDragStart(event: DragEvent) {
+  if (!props.reorderable) {
+    event.preventDefault();
+    event.stopPropagation();
   }
 }
 
@@ -45,16 +62,23 @@ async function onToggleFavorite() {
 
 <template>
   <div
-    class="group relative cursor-pointer overflow-hidden rounded-xl border bg-elevated transition-colors"
-    :class="selected ? 'border-primary ring-2 ring-primary/30' : 'border-default hover:border-primary/40'"
-    title="点击复制"
+    class="group relative overflow-hidden rounded-xl border bg-elevated transition-colors"
+    :class="[
+      selected ? 'border-primary ring-2 ring-primary/30' : 'border-default hover:border-primary/40',
+      reorderable ? 'cursor-grab select-none active:cursor-grabbing' : 'cursor-pointer'
+    ]"
+    :title="reorderable ? '拖动调整顺序' : '点击复制'"
+    data-meme-card
     @click="onClick"
+    @dragstart="onRootDragStart"
   >
     <img
       :src="src"
       :alt="meme.name"
       loading="lazy"
-      class="aspect-square w-full object-cover"
+      draggable="false"
+      class="aspect-square w-full object-cover select-none"
+      @dragstart.prevent.stop
     >
 
     <div class="flex flex-col gap-1 p-2">
@@ -73,6 +97,13 @@ async function onToggleFavorite() {
           +{{ meme.tags.length - 3 }}
         </span>
       </div>
+    </div>
+
+    <div
+      v-if="reorderable"
+      class="pointer-events-none absolute inset-x-0 top-0 flex justify-center pt-1.5 opacity-60 transition-opacity group-hover:opacity-100"
+    >
+      <UIcon name="i-lucide-grip-horizontal" class="size-4 text-highlighted drop-shadow" />
     </div>
 
     <div v-if="selectable" class="absolute left-2 top-2">

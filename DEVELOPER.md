@@ -12,7 +12,8 @@
 | 数据库 | MongoDB，模型字段 camelCase（`groupId`/`storageKey`/`mimeType`/`thumbKey`/`usedAt`/`createdAt`），集合 `groups` / `memes` |
 | 鉴权 | 访问密钥登录 → HMAC-SHA256 短期会话令牌（7 天，`Authorization: Bearer` / `?token=`）；Cookie 会话为自洽简化版（原 iron-seal 兼容待补，仅影响 Web 前端） |
 | 实时同步 | WebSocket `/ws`：连接下发 `sync` revision、30s 心跳 `ping`、变更广播 `{type, revision, payload}`，断线重连自动补差 |
-| 图片处理 | `image` crate：上传即生成 256px WebP 缩略图（GIF 取首帧；仅 lossless，原 sharp 为 lossy q80） |
+| 图片处理 | `image` crate：上传即生成 256px WebP 缩略图（GIF 取首帧；仅 lossless，原 sharp 为 lossy q80）；导入限制最长边 2560px（`probe_dimensions` 仅读图片头） |
+| 导入（桌面端） | 文件 / 文件夹双入口 + 窗口级拖放（`useFileCollect.ts` 递归目录 + 预校验，`DropImportOverlay.vue`；需 `dragDropEnabled: false`）；文件夹可按名自动建组 |
 | 存储 | 本地文件目录（`STORAGE_LOCAL_DIR`，默认 `.data/uploads/memes`），存储键 `{uuid}{ext}` |
 | 桌面壳 | Tauri 2（`tray-icon` + `tauri-plugin-global-shortcut` + `windows` crate 原生剪贴板；启动按屏夹取窗口尺寸；全局快捷键显示窗口时切入收藏分组） |
 | 工程 | npm workspaces + Turborepo；ESLint（`@nuxt/eslint`）；Rust 侧 cargo（离线构建见 `rust-server/README.md`） |
@@ -79,4 +80,4 @@ npm run reset:dev        # 一键清除开发数据（node rust-server/scripts/r
 - 服务端包资源（`rust-server/scripts/start.sh` / `start.bat` / `README.txt` / `.env.example`）需随仓库维护。
 - 打包清单、发布前检查与常见问题见 `RELEASE.md`（维护者本地文档，已 gitignore）。
 
-> 当前 `release.yml` 的 `build-web` job 仍按旧的 Nuxt `.output` 打包，尚未改写为 `build-server`（Rust）。发布前请同步 workflow，或在手动模式下按 `RELEASE.md` 第三步打包服务端。
+> 桌面端自动更新：`build-desktop` 会用 `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 两个 secrets 签名并生成 `latest.json`（随安装包上传到 GitHub Release）。首次发布前需生成 minisign 密钥对、把公钥填入 `tauri.conf.json` 的 `plugins.updater.pubkey`；**版本号必须严格递增**（updater 不支持降级）。详见 `RELEASE.md`。

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useMemes } from "../composables/useMemes";
-import { useUpload } from "../composables/useUpload";
+import { useUpload, MAX_IMAGE_EDGE } from "../composables/useUpload";
+import { collectFromDataTransfer, collectFromInput } from "../composables/useFileCollect";
 
 const open = defineModel<boolean>('open', { default: false })
 
-const { groups, refresh } = useMemes();
+const { groups, refresh, ensureGroup } = useMemes();
+const folderAsGroup = ref(true);
 const groupId = ref<string>(groups.value.find(group => group.isUngrouped)?.id ?? groups.value.find(group => !group.isFavorites && !group.isRecent)?.id ?? '');
 
 const groupOptions = computed(() => groups.value.filter(group => !group.isFavorites && !group.isRecent).map(group => ({ label: group.name, value: group.id })));
@@ -16,24 +18,35 @@ watch(groups, (value) => {
   }
 })
 
-const upload = useUpload(groupId, refresh);
+const upload = useUpload(groupId, refresh, { folderAsGroup, ensureGroup });
 
 const dragActive = ref(false);
 const fileInput = ref<HTMLInputElement>();
+const folderInput = ref<HTMLInputElement>();
 
 function onSelectFiles() {
   fileInput.value?.click();
 }
 
-function onFilesChange(event: Event) {
+function onSelectFolder() {
+  folderInput.value?.click();
+}
+
+async function onFilesChange(event: Event) {
   const input = event.target as HTMLInputElement;
-  upload.addFiles(Array.from(input.files || []));
+  await upload.addFiles(Array.from(input.files || []));
   input.value = '';
 }
 
-function onDrop(event: DragEvent) {
+async function onFolderChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  await upload.addCollected(collectFromInput(input));
+  input.value = '';
+}
+
+async function onDrop(event: DragEvent) {
   dragActive.value = false;
-  upload.addFiles(Array.from(event.dataTransfer?.files || []));
+  await upload.addCollected(await collectFromDataTransfer(event.dataTransfer));
 }
 
 async function onSubmit() {
@@ -51,6 +64,7 @@ async function onSubmit() {
     title="上传表情"
     :dismissible="!upload.uploading"
     :closeable="!upload.uploading"
+    :footer-divider="false"
     width-class="w-[28rem]"
   >
     <template #body>
@@ -74,24 +88,38 @@ async function onSubmit() {
         <div
           class="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-8 py-10 text-center transition-colors"
           :class="dragActive ? 'border-primary bg-primary/5' : 'border-default'"
-          @dragover.prevent="dragActive = true"
-          @dragleave.prevent="dragActive = false"
-          @drop.prevent="onDrop"
+          @dragenter.stop
+          @dragover.prevent.stop="dragActive = true"
+          @dragleave.prevent.stop="dragActive = false"
+          @drop.prevent.stop="onDrop"
         >
-          <UIcon name="i-lucide-image-plus" class="size-10 text-dimmed" />
+          <UIcon v-if="upload.screening" name="i-lucide-loader-circle" class="size-10 animate-spin text-primary" />
+          <UIcon v-else name="i-lucide-image-plus" class="size-10 text-dimmed" />
           <p class="text-sm text-muted">
-            将图片拖拽到这里，或点击选择文件
+            {{ upload.screening ? '正在校验文件...' : '将图片或文件夹拖拽到这里' }}
           </p>
           <p class="text-xs text-dimmed">
-            支持 PNG / JPEG / GIF / WebP，单个不超过 20MB
+            支持 PNG / JPEG / GIF / WebP，单个不超过 20MB，最长边不超过 {{ MAX_IMAGE_EDGE }}px
           </p>
-          <UButton
-            label="选择文件"
-            icon="i-lucide-folder-open"
-            color="primary"
-            size="sm"
-            @click="onSelectFiles"
-          />
+          <div class="flex items-center gap-2">
+            <UButton
+              label="选择文件"
+              icon="i-lucide-image"
+              color="primary"
+              size="sm"
+              :disabled="upload.screening"
+              @click="onSelectFiles"
+            />
+            <UButton
+              label="选择文件夹"
+              icon="i-lucide-folder-open"
+              color="neutral"
+              variant="subtle"
+              size="sm"
+              :disabled="upload.screening"
+              @click="onSelectFolder"
+            />
+          </div>
           <input
             ref="fileInput"
             type="file"
@@ -99,6 +127,15 @@ async function onSubmit() {
             multiple
             class="hidden"
             @change="onFilesChange"
+          >
+          <input
+            ref="folderInput"
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            webkitdirectory
+            class="hidden"
+            @change="onFolderChange"
           >
         </div>
 
@@ -146,6 +183,18 @@ async function onSubmit() {
           class="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-600 dark:text-red-400"
         >
           {{ upload.failedCount }} 个文件上传失败，可悬停缩略图查看原因，或点击「重试失败文件」
+        </div>
+
+        <div v-if="upload.hasFolders" class="flex items-start gap-2 rounded-lg border border-default bg-elevated/40 p-3">
+          <UCheckbox v-model="folderAsGroup" />
+          <div class="min-w-0">
+            <p class="text-xs font-medium text-highlighted">
+              按文件夹名自动创建分组
+            </p>
+            <p class="text-xs text-muted">
+              关闭后全部上传到下方选定的分组
+            </p>
+          </div>
         </div>
 
         <div v-if="groupOptions.length" class="flex items-center justify-between gap-4">

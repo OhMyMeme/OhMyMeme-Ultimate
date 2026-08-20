@@ -6,12 +6,14 @@ import { useMemes } from "../composables/useMemes";
 import { useRealtime } from "../composables/useRealtime";
 import { useHeartbeat } from "../composables/useHeartbeat";
 import { usePlatform } from "../composables/usePlatform";
+import { useRouteMotion } from "../composables/useRouteMotion";
 
 const route = useRoute();
 const router = useRouter();
 const open = ref(false);
 const sidebarCollapsed = ref(false);
 const { isWindowsTauri } = usePlatform();
+const { active: routeMotionActive } = useRouteMotion();
 
 const memes = useMemes();
 const memeGroups = memes.groups;
@@ -75,7 +77,10 @@ const links = computed<NavigationMenuItem[][]>(() => [[{
   <UDashboardGroup
     unit="rem"
     :persistent="false"
-    :class="[{ 'top-9': isWindowsTauri, 'desktop-sidebar-is-collapsed': sidebarCollapsed }]"
+    :class="[
+      'layout-motion',
+      { 'top-9': isWindowsTauri, 'desktop-sidebar-is-collapsed': sidebarCollapsed }
+    ]"
   >
     <UDashboardSidebar
       id="default"
@@ -83,7 +88,7 @@ const links = computed<NavigationMenuItem[][]>(() => [[{
       v-model:collapsed="sidebarCollapsed"
       collapsible
       resizable
-      :class="[{ 'desktop-sidebar': isWindowsTauri }, 'bg-elevated/25']"
+      class="desktop-sidebar bg-elevated/25"
       :ui="{ footer: 'lg:border-t lg:border-default' }"
     >
       <template #default="{ collapsed }">
@@ -115,6 +120,7 @@ const links = computed<NavigationMenuItem[][]>(() => [[{
       </template>
     </UDashboardSidebar>
 
-    <RouterView />
+    <RouterView :class="{ 'page-motion': routeMotionActive }" />
+    <DropImportOverlay />
   </UDashboardGroup>
 </template>

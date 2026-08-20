@@ -102,6 +102,9 @@ pub async fn list_memes(
         );
     }
 
+    // 只有真实归属分组（未分组 / 自定义分组）支持自定义拖动排序；
+    // 收藏与最近使用是跨分组的虚拟视图，必须保持各自的固定排序语义。
+    let mut orderable = false;
     if let Some(gid) = &group_id {
         let gid = require_object_id(gid)?;
         let group = find_group_or_404(&state, &gid).await?;
@@ -112,6 +115,7 @@ pub async fn list_memes(
             recent = true;
         } else {
             filter.insert("groupId", gid);
+            orderable = true;
         }
     }
 
@@ -122,9 +126,11 @@ pub async fn list_memes(
     };
 
     let sort = if recent {
-        doc! { "usedAt": -1, "createdAt": -1 }
+        doc! { "usedAt": -1, "createdAt": -1, "_id": 1 }
+    } else if orderable {
+        doc! { "sortOrder": -1, "createdAt": -1, "_id": 1 }
     } else {
-        doc! { "createdAt": -1 }
+        doc! { "createdAt": -1, "_id": 1 }
     };
 
     let memes = state.memes();
@@ -220,6 +226,25 @@ pub async fn upload_memes(
                 continue;
             };
 
+            let max_edge = crate::storage::MAX_IMAGE_EDGE;
+            match crate::storage::probe_dimensions(data) {
+                Some((w, h)) if w.max(h) > max_edge => {
+                    results.push(serde_json::json!({
+                        "name": name,
+                        "status": "failed",
+                        "reason": format!("分辨率超限（{w}×{h}，最长边不超过 {max_edge}px）")
+                    }));
+                    log_warn!("上传失败: {name}（分辨率 {w}×{h} 超过 {max_edge}px）");
+                    continue;
+                }
+                Some(_) => {}
+                None => {
+                    results.push(serde_json::json!({ "name": name, "status": "failed", "reason": "图片损坏或无法解析" }));
+                    log_warn!("上传失败: {name}（无法解析图片尺寸）");
+                    continue;
+                }
+            }
+
             let (storage_key, size) = state.storage.save(data, mime_type).await?;
             saved_keys.push(storage_key.clone());
 
@@ -249,6 +274,8 @@ pub async fn upload_memes(
                 favorite: false,
                 used_at: None,
                 created_at: Some(now),
+                // 新上传不预设排序权重，按 createdAt 落在自定义排序之后
+                sort_order: None,
             };
             state.memes().insert_one(&meme).await?;
             results.push(serde_json::json!({ "name": name, "status": "created" }));
@@ -302,6 +329,7 @@ pub async fn patch_meme(
     let id = require_object_id(&id)?;
 
     let mut update = mongodb::bson::Document::new();
+    let mut unset = mongodb::bson::Document::new();
     if let Some(name) = &body.name {
         let name = name.trim().to_string();
         if !name.is_empty() {
@@ -318,6 +346,8 @@ pub async fn patch_meme(
             return Err(AppError::bad_request("不能移动到最近使用分组"));
         }
         update.insert("groupId", gid);
+        // 换组后旧分组的排序权重失效，清除以免影响新分组顺序
+        unset.insert("sortOrder", "");
     }
     if let Some(fav) = body.favorite {
         update.insert("favorite", fav);
@@ -339,9 +369,14 @@ pub async fn patch_meme(
         return Err(AppError::bad_request("没有需要更新的字段"));
     }
 
+    let mut update_doc = doc! { "$set": update.clone() };
+    if !unset.is_empty() {
+        update_doc.insert("$unset", unset);
+    }
+
     let doc = state
         .memes()
-        .find_one_and_update(doc! { "_id": id }, doc! { "$set": update.clone() })
+        .find_one_and_update(doc! { "_id": id }, update_doc)
         .return_document(mongodb::options::ReturnDocument::After)
         .await?
         .ok_or_else(|| AppError::not_found("表情不存在"))?;
@@ -482,13 +517,14 @@ pub async fn meme_thumb(
         doc.mime_type.as_str()
     };
 
-    let mut res = Response::new(axum::body::Body::from(data.clone()));
+    let data_len = data.len();
+    let mut res = Response::new(axum::body::Body::from(data));
     if let Ok(v) = HeaderValue::from_str(content_type) {
         res.headers_mut().insert(CONTENT_TYPE, v);
     }
     res.headers_mut()
         .insert("x-content-type-options", HeaderValue::from_static("nosniff"));
-    if let Ok(v) = HeaderValue::from_str(&data.len().to_string()) {
+    if let Ok(v) = HeaderValue::from_str(&data_len.to_string()) {
         res.headers_mut().insert("content-length", v);
     }
     res.headers_mut().insert(
@@ -546,6 +582,142 @@ pub async fn list_tags(State(state): State<Arc<AppState>>) -> Result<Response, A
     Ok(json_response(serde_json::json!(tags)))
 }
 
+/// 拖动排序时只需要 id 与排序字段，单独定义以便安全使用投影查询
+#[derive(Debug, Clone, Deserialize)]
+pub struct OrderRow {
+    #[serde(rename = "_id")]
+    pub id: ObjectId,
+    #[serde(default, rename = "sortOrder")]
+    pub sort_order: Option<i64>,
+}
+
+#[derive(Deserialize)]
+pub struct ReorderBody {
+    /// 被拖动的表情 id
+    pub id: Option<String>,
+    /// 落点：把 id 放到 beforeId 之前；为空表示移动到末尾
+    #[serde(rename = "beforeId")]
+    pub before_id: Option<String>,
+}
+
+/// 拖动排序：把一个表情移动到另一个表情之前（beforeId 为空则移到末尾）。
+///
+/// 采用「相对落点」而非整表 id 列表，因为前端网格是无限滚动分页的，
+/// 只提交已加载的一段 id 会让未加载部分的位置变得不确定。
+///
+/// 排序权重 sortOrder 越大越靠前。为避免频繁重排整个分组，这里只重写
+/// 受影响的表情：给被拖动项取一个落在前后邻居之间的权重；当空隙不足时，
+/// 才对该分组按当前顺序整体重新编号（步长 1024）后再插入。
+pub async fn reorder_memes(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<ReorderBody>,
+) -> Result<Response, AppError> {
+    const STEP: i64 = 1024;
+
+    let id = body
+        .id
+        .as_deref()
+        .map(require_object_id)
+        .transpose()?
+        .ok_or_else(|| AppError::bad_request("缺少要移动的表情"))?;
+    let before_id = body
+        .before_id
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .map(require_object_id)
+        .transpose()?;
+
+    if Some(id) == before_id {
+        return Err(AppError::bad_request("落点不能是自身"));
+    }
+
+    let moving = find_meme_or_404(&state, &id).await?;
+    let group_id = moving.group_id;
+
+    // 目标必须与被拖动项同组，避免跨分组写入
+    if let Some(before) = &before_id {
+        let target = find_meme_or_404(&state, before).await?;
+        if target.group_id != group_id {
+            return Err(AppError::bad_request("落点不在同一分组"));
+        }
+    }
+
+    // 该分组当前顺序（与 list_memes 的可排序分支保持一致）。
+    // 只取排序所需字段，避免把整组文档（可能上千条）全量读进内存。
+    // 用独立的轻量结构体接收：MemeDoc 的 name/storageKey/mimeType 没有 serde 默认值，
+    // 投影后无法反序列化。
+    let ordered: Vec<OrderRow> = state
+        .memes()
+        .clone_with_type::<OrderRow>()
+        .find(doc! { "groupId": group_id })
+        .sort(doc! { "sortOrder": -1, "createdAt": -1, "_id": 1 })
+        .projection(doc! { "_id": 1, "sortOrder": 1, "createdAt": 1 })
+        .await?
+        .try_collect()
+        .await?;
+
+    // 去掉被拖动项后，按落点算出插入位置
+    let rest: Vec<&OrderRow> = ordered.iter().filter(|m| m.id != id).collect();
+    let insert_at = match &before_id {
+        Some(before) => rest
+            .iter()
+            .position(|m| m.id == *before)
+            .ok_or_else(|| AppError::conflict("列表已变化，请刷新后重试"))?,
+        None => rest.len(),
+    };
+
+    // 邻居：prev 在前（权重更大），next 在后（权重更小）。
+    // 必须区分「没有邻居」和「邻居还没有权重」——历史数据的 sortOrder 为空，
+    // 若把两者都当成 None，往未编号的列表中间拖动就会被误判成插入队首。
+    let prev = insert_at.checked_sub(1).and_then(|i| rest.get(i)).copied();
+    let next = rest.get(insert_at).copied();
+    let prev_order = prev.and_then(|m| m.sort_order);
+    let next_order = next.and_then(|m| m.sort_order);
+
+    let target_order = match (prev, next) {
+        // 前后都有邻居：只有两侧都已编号且中间留有空隙时才能只写一条记录
+        (Some(_), Some(_)) => match (prev_order, next_order) {
+            (Some(p), Some(n)) if p - n > 1 => Some(n + (p - n) / 2),
+            // 任一侧尚未编号（历史数据），无法安全取中值 → 整体重排
+            _ => None,
+        },
+        // 插到队首：比后继再高一个步长；后继未编号则需整体重排
+        (None, Some(_)) => next_order.map(|n| n.saturating_add(STEP)),
+        // 插到队尾：比前驱再低一个步长；前驱未编号则需整体重排
+        (Some(_), None) => prev_order.map(|p| p - STEP),
+        // 分组内只有这一个表情
+        (None, None) => Some(STEP),
+    };
+
+    if let Some(order) = target_order {
+        state
+            .memes()
+            .update_one(doc! { "_id": id }, doc! { "$set": { "sortOrder": order } })
+            .await?;
+    } else {
+        // 重新编号：按目标顺序从高到低均匀分配，一次 update_many 无法表达不同值，
+        // 因此逐条写入；仅在空隙耗尽时才会走到这里，属于低频路径。
+        let mut final_ids: Vec<ObjectId> = rest.iter().map(|m| m.id).collect();
+        final_ids.insert(insert_at, id);
+        let total = final_ids.len() as i64;
+        for (index, mid) in final_ids.iter().enumerate() {
+            let order = (total - index as i64) * STEP;
+            state
+                .memes()
+                .update_one(doc! { "_id": mid }, doc! { "$set": { "sortOrder": order } })
+                .await?;
+        }
+    }
+
+    log_info!("拖动排序: 表情 {id} 移动到 {:?} 之前（分组 {group_id}）", before_id);
+    state.realtime.broadcast(
+        "memes-changed",
+        Some(serde_json::json!({ "groupId": group_id.to_string() })),
+    );
+
+    Ok(json_response(serde_json::json!({ "ok": true })))
+}
+
 #[derive(Deserialize)]
 pub struct BatchBody {
     pub ids: Option<Vec<String>>,
@@ -587,7 +759,10 @@ pub async fn batch_memes(
 
             let result = state
                 .memes()
-                .update_many(doc! { "_id": { "$in": &ids } }, doc! { "$set": { "groupId": group_id } })
+                .update_many(
+                    doc! { "_id": { "$in": &ids } },
+                    doc! { "$set": { "groupId": group_id }, "$unset": { "sortOrder": "" } },
+                )
                 .await?;
 
             log_info!("批量移动: {} 个表情到分组 {group_id}", ids.len());

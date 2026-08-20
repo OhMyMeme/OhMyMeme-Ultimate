@@ -42,7 +42,7 @@ useHead({
 const { status, start: startHeartbeat } = useHeartbeat();
 const { baseUrl } = useServer();
 
-const { uiScale, shortcut } = useSettings();
+const { uiScale, shortcut, toastDuration } = useSettings();
 const { apply: applyShortcut } = useGlobalShortcut();
 const memes = useMemes();
 
@@ -108,7 +108,7 @@ watch(() => route.path, (path) => {
 <template>
   <TitleBar v-if="isWindowsTauri" />
   <Suspense>
-    <UApp>
+    <UApp :toaster="{ duration: toastDuration }">
       <RouterView />
     </UApp>
   </Suspense>

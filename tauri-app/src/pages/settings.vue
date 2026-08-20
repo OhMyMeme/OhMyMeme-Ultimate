@@ -18,6 +18,7 @@
         <BehaviorCard />
         <ShortcutCard />
         <AccountCard />
+        <UpdateCard />
         <AboutCard />
       </div>
     </template>

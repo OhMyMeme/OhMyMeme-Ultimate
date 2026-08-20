@@ -43,6 +43,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/memes/{id}/thumb", get(memes::meme_thumb))
         .route("/api/memes/{id}/use", post(memes::mark_used))
         .route("/api/memes/batch", post(memes::batch_memes))
+        .route("/api/memes/reorder", post(memes::reorder_memes))
         .route("/api/tags", get(memes::list_tags))
         .route("/api/overview", get(overview::overview))
         .route("/ws", get(ws_handler))

@@ -25,6 +25,7 @@ export interface Meme {
   thumbUrl?: string
   favorite: boolean
   createdAt?: string
+  sortOrder?: number | null
 }
 
 export interface MemeListResponse {

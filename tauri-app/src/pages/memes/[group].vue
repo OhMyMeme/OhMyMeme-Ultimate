@@ -5,6 +5,7 @@ import { useRoute, useRouter } from "vue-router";
 import type { Meme, MemeListResponse, Tag } from "../../types";
 import { useMemes } from "../../composables/useMemes";
 import { useApi } from "../../composables/useApi";
+import { useSettings } from "../../composables/useSettings";
 
 const route = useRoute();
 const router = useRouter();
@@ -46,7 +47,9 @@ if (!group.value) {
   router.replace("/memes");
 }
 
-const { getMemes, getTags } = useApi();
+const { getMemes, getTags, reorderMeme } = useApi();
+const { dragSort } = useSettings();
+const toast = useToast();
 
 const searchInput = ref("")
 const effectiveQuery = ref("")
@@ -122,6 +125,11 @@ watch(pageSize, () => {
 });
 
 watch(revision, () => {
+  // 自己的拖动排序会触发服务端广播，此时不要重载列表，否则刚拖好的位置会闪一下
+  if (suppressReload.value) {
+    suppressReload.value = false;
+    return;
+  }
   load(true);
 });
 
@@ -165,6 +173,10 @@ const selectedIds = computed(() => [...selected.value]);
 function toggleSelecting() {
   selecting.value = !selecting.value;
   selected.value = new Set();
+  if (selecting.value) {
+    // 进入批量选择时自动退出拖动排序，两者互斥
+    dragSort.value = false;
+  }
 }
 
 function toggleSelect(meme: Meme) {
@@ -185,6 +197,101 @@ function exitSelection() {
   selecting.value = false;
   selected.value = new Set();
 }
+
+// ---- 拖动排序 ----
+// 仅在开关开启、非批量选择、非只读分组、且未处于搜索/标签筛选时可用；
+// 筛选时列表是子集，拖动落点无法映射到真实顺序。
+const suppressReload = ref(false);
+const draggingId = ref<string | null>(null);
+const dragOverId = ref<string | null>(null);
+
+const canReorder = computed(() =>
+  dragSort.value && !isReadOnly.value && !selecting.value && !isFiltering.value
+);
+
+/** 顶部操作栏快捷开关：与批量选择互斥，避免两种交互抢同一次点击 */
+function toggleDragSort() {
+  dragSort.value = !dragSort.value;
+  if (dragSort.value) {
+    exitSelection();
+  }
+  onDragEnd();
+}
+
+function onDragStart(meme: Meme, event: DragEvent) {
+  if (!canReorder.value) {
+    // 未开启拖动排序时不允许发起任何原生拖拽（否则图片会被拖出应用）
+    event.preventDefault();
+    return;
+  }
+  draggingId.value = meme.id;
+  if (event.dataTransfer) {
+    // 仅允许"移动"语义，不提供 copy/link，避免被外部应用当作图片接收
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.dropEffect = "move";
+    // 只写内部标识，不写 URL/文件，外部程序拿不到可粘贴的图片内容
+    event.dataTransfer.setData("application/x-ohmymeme-meme", meme.id);
+    // 拖拽预览用整张卡片，而不是浏览器默认的裸图片
+    const card = (event.currentTarget as HTMLElement | null)?.closest<HTMLElement>("[data-meme-card]")
+      ?? (event.currentTarget as HTMLElement | null);
+    if (card && event.dataTransfer.setDragImage) {
+      const rect = card.getBoundingClientRect();
+      event.dataTransfer.setDragImage(card, rect.width / 2, rect.height / 2);
+    }
+  }
+}
+
+function onDragOver(meme: Meme) {
+  if (!canReorder.value || !draggingId.value || meme.id === draggingId.value) {
+    return;
+  }
+  dragOverId.value = meme.id;
+}
+
+function onDragEnd() {
+  draggingId.value = null;
+  dragOverId.value = null;
+}
+
+async function onDrop(target: Meme | null) {
+  const sourceId = draggingId.value;
+  onDragEnd();
+  if (!canReorder.value || !sourceId || target?.id === sourceId) {
+    return;
+  }
+
+  const list = [...items.value];
+  const from = list.findIndex(m => m.id === sourceId);
+  if (from < 0) {
+    return;
+  }
+  const [moved] = list.splice(from, 1);
+  if (!moved) {
+    return;
+  }
+  const to = target ? list.findIndex(m => m.id === target.id) : list.length;
+  if (target && to < 0) {
+    return;
+  }
+  list.splice(target ? to : list.length, 0, moved);
+
+  const previous = items.value;
+  // 乐观更新：先让界面立刻就位，失败再回滚
+  state.value = { ...state.value, items: list };
+  suppressReload.value = true;
+
+  try {
+    await reorderMeme(sourceId, target?.id);
+  } catch (error) {
+    state.value = { ...state.value, items: previous };
+    suppressReload.value = false;
+    toast.add({
+      title: "排序失败",
+      description: error instanceof Error ? error.message : String(error),
+      color: "error"
+    });
+  }
+}
 </script>
 
 <template>
@@ -197,6 +304,18 @@ function exitSelection() {
         </template>
 
         <template #right>
+          <UButton
+            v-if="!isReadOnly"
+            :label="dragSort ? '完成排序' : '拖动排序'"
+            :icon="dragSort ? 'i-lucide-check' : 'i-lucide-grip-horizontal'"
+            :color="dragSort ? 'primary' : 'neutral'"
+            :variant="dragSort ? 'solid' : 'outline'"
+            size="sm"
+            class="rounded-full"
+            :ui="{ label: 'hidden sm:block' }"
+            :title="dragSort ? '关闭拖动排序，恢复点击复制' : '开启拖动排序'"
+            @click="toggleDragSort"
+          />
           <UButton
             :label="selecting ? '退出批量' : '批量选择'"
             :icon="selecting ? 'i-lucide-x' : 'i-lucide-list-checks'"
@@ -267,6 +386,21 @@ function exitSelection() {
           @cancel="exitSelection"
         />
 
+        <div
+          v-if="canReorder"
+          class="flex items-center gap-2 rounded-lg bg-elevated px-3 py-2 text-xs text-muted ring-1 ring-default"
+        >
+          <UIcon name="i-lucide-grip-horizontal" class="size-4 shrink-0" />
+          <span>拖动排序已开启：按住表情拖到目标位置即可调整顺序，顺序会自动保存。此模式下单击不会复制。</span>
+        </div>
+        <div
+          v-else-if="dragSort && !isReadOnly && isFiltering"
+          class="flex items-center gap-2 rounded-lg bg-elevated px-3 py-2 text-xs text-muted ring-1 ring-default"
+        >
+          <UIcon name="i-lucide-info" class="size-4 shrink-0" />
+          <span>筛选状态下无法拖动排序，请先清除搜索与标签筛选。</span>
+        </div>
+
         <div class="meme-grid grid grid-cols-4 gap-3 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12">
           <MemeCard
             v-for="meme in items"
@@ -274,8 +408,28 @@ function exitSelection() {
             :meme="meme"
             :selectable="selecting"
             :selected="selected.has(meme.id)"
+            :reorderable="canReorder"
+            :draggable="canReorder"
+            class="transition-opacity"
+            :class="[
+              draggingId === meme.id ? 'opacity-40' : '',
+              dragOverId === meme.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-bg' : ''
+            ]"
             @toggle-select="toggleSelect(meme)"
+            @dragstart="onDragStart(meme, $event)"
+            @dragover.prevent="onDragOver(meme)"
+            @drop.prevent="onDrop(meme)"
+            @dragend="onDragEnd"
           />
+          <div
+            v-if="canReorder"
+            class="flex min-h-16 items-center justify-center rounded-xl border border-dashed border-default text-[10px] text-dimmed transition-colors"
+            :class="dragOverId === '__end__' ? 'border-primary text-primary' : ''"
+            @dragover.prevent="dragOverId = '__end__'"
+            @drop.prevent="onDrop(null)"
+          >
+            移到末尾
+          </div>
         </div>
 
         <div v-if="selecting" class="flex items-center justify-between">

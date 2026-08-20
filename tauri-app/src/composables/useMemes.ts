@@ -45,6 +45,27 @@ const _useMemes = () => {
     return refreshAfter(() => api.createGroup(name));
   }
 
+  /** 按名称取得分组 id，不存在则创建（文件夹导入用）；重名(409)时以服务端现有分组为准 */
+  async function ensureGroup(name: string): Promise<string> {
+    const existing = groups.value.find(group => group.name === name && !group.isFavorites && !group.isRecent);
+    if (existing) {
+      return existing.id;
+    }
+    try {
+      const created = await api.createGroup(name) as MemeGroup;
+      revision.value++;
+      await refresh();
+      return created.id;
+    } catch (error) {
+      await refresh();
+      const found = groups.value.find(group => group.name === name && !group.isFavorites && !group.isRecent);
+      if (found) {
+        return found.id;
+      }
+      throw error;
+    }
+  }
+
   function renameGroup(id: string, name: string) {
     return refreshAfter(() => api.renameGroup(id, name));
   }
@@ -77,6 +98,7 @@ const _useMemes = () => {
     bumpRevision,
     groupById,
     createGroup,
+    ensureGroup,
     renameGroup,
     deleteGroup,
     updateMeme,

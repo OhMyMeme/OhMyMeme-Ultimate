@@ -1,6 +1,7 @@
 import { computed, reactive, ref, type Ref } from "vue";
 import { useServer } from "./useServer";
 import { useAuth } from "./useAuth";
+import { screenFiles, type CollectedFile } from "./useFileCollect";
 
 type FileStatus = "pending" | "uploading" | "success" | "failed";
 
@@ -9,17 +10,20 @@ interface UploadFile {
   status: FileStatus
   reason?: string
   url: string
+  folder?: string
 }
 
 interface UploadBatchResult {
   results: Array<{ name: string, status: "created" | "failed", reason?: string }>
 }
 
-const MAX_FILES = 500
-const MAX_FILE_SIZE = 20 * 1024 * 1024
+export const MAX_FILES = 500
+export const MAX_FILE_SIZE = 20 * 1024 * 1024
+/** 与服务端 storage.rs 的 MAX_IMAGE_EDGE 保持一致 */
+export const MAX_IMAGE_EDGE = 2560
 const BATCH_SIZE = 20
 const MAX_BATCH_BYTES = 100 * 1024 * 1024
-const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+export const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
 export function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) {
@@ -37,7 +41,16 @@ function extractXhrError(xhr: XMLHttpRequest): string {
   }
 }
 
-export function useUpload(groupId: Ref<string>, onDone: () => Promise<void>) {
+export interface UploadOptions {
+  /** 文件夹导入时按文件夹名自动建组 */
+  folderAsGroup?: Ref<boolean>
+  /** 按名称取得或创建分组，返回分组 id */
+  ensureGroup?: (name: string) => Promise<string>
+}
+
+export function useUpload(groupId: Ref<string>, onDone: () => Promise<void>, options: UploadOptions = {}) {
+  const folderAsGroup = options.folderAsGroup ?? ref(false);
+  const ensureGroup = options.ensureGroup ?? (async () => groupId.value);
   const toast = useToast();
   const { resolveUrl } = useServer();
   const { sessionToken } = useAuth();
@@ -50,6 +63,7 @@ export function useUpload(groupId: Ref<string>, onDone: () => Promise<void>) {
   const uploadedBytes = ref(0);
 
   const uploadableCount = computed(() => files.value.filter(item => item.status !== "success").length);
+  const hasFolders = computed(() => files.value.some(item => Boolean(item.folder)));
   const progress = computed(() => {
     if (!submitTotalBytes.value) {
       return 0;
@@ -59,34 +73,33 @@ export function useUpload(groupId: Ref<string>, onDone: () => Promise<void>) {
   const totalBytesText = computed(() => formatBytes(submitTotalBytes.value));
   const uploadedBytesText = computed(() => formatBytes(uploadedBytes.value));
 
-  function addFiles(incoming: File[]) {
-    const rejected: string[] = [];
-    for (const file of incoming) {
-      if (!ACCEPTED_TYPES.includes(file.type)) {
-        rejected.push(`${file.name}（格式不支持）`);
-        continue;
-      }
-      if (file.size === 0) {
-        rejected.push(`${file.name}（文件为空）`);
-        continue;
-      }
-      if (file.size > MAX_FILE_SIZE) {
-        rejected.push(`${file.name}（超过 20MB）`);
-        continue;
-      }
-      if (files.value.length >= MAX_FILES) {
-        rejected.push(`（单次最多 ${MAX_FILES} 个文件）`);
-        break;
-      }
-      files.value.push({ file, status: "pending", url: URL.createObjectURL(file) });
+  const screening = ref(false);
+
+  /** 统一入口：文件选择 / 文件夹导入 / 窗口拖放都经此预校验（格式/空/体积/分辨率）后入列 */
+  async function addCollected(incoming: CollectedFile[]) {
+    if (!incoming.length) {
+      return;
     }
-    if (rejected.length) {
-      toast.add({
-        title: "部分文件未添加",
-        description: rejected.slice(0, 3).join("、") + (rejected.length > 3 ? " 等" : ""),
-        color: "warning"
+    screening.value = true;
+    try {
+      const { files: accepted, rejected } = await screenFiles(incoming, files.value.length);
+      accepted.forEach(({ file, folder }) => {
+        files.value.push({ file, folder, status: "pending", url: URL.createObjectURL(file) });
       });
+      if (rejected.length) {
+        toast.add({
+          title: `${rejected.length} 个文件未添加`,
+          description: rejected.slice(0, 3).join("、") + (rejected.length > 3 ? ` 等 ${rejected.length} 项` : ""),
+          color: "warning"
+        });
+      }
+    } finally {
+      screening.value = false;
     }
+  }
+
+  function addFiles(incoming: File[]) {
+    return addCollected(incoming.map(file => ({ file })));
   }
 
   function removeFile(index: number) {
@@ -106,11 +119,11 @@ export function useUpload(groupId: Ref<string>, onDone: () => Promise<void>) {
     uploadedBytes.value = 0;
   }
 
-  function uploadBatch(batch: UploadFile[], onProgress: (loaded: number) => void): Promise<UploadBatchResult> {
+  function uploadBatch(batch: UploadFile[], targetGroupId: string, onProgress: (loaded: number) => void): Promise<UploadBatchResult> {
     return new Promise((resolve, reject) => {
       const attempt = (retried: boolean) => {
         const form = new FormData();
-        form.append("groupId", groupId.value);
+        form.append("groupId", targetGroupId);
         batch.forEach(({ file }) => form.append("files", file));
 
         const xhr = new XMLHttpRequest();
@@ -150,11 +163,19 @@ export function useUpload(groupId: Ref<string>, onDone: () => Promise<void>) {
     });
   }
 
-  function buildBatches(targets: UploadFile[]): UploadFile[][] {
+  function buildBatches(targets: UploadFile[], groupOf: (item: UploadFile) => string): UploadFile[][] {
     const batches: UploadFile[][] = [];
     let current: UploadFile[] = [];
     let currentBytes = 0;
+    let currentGroup = "";
     for (const item of targets) {
+      const itemGroup = groupOf(item);
+      if (current.length && itemGroup !== currentGroup) {
+        batches.push(current);
+        current = [];
+        currentBytes = 0;
+      }
+      currentGroup = itemGroup;
       if (current.length >= BATCH_SIZE || (current.length > 0 && currentBytes + item.file.size > MAX_BATCH_BYTES)) {
         batches.push(current);
         current = [];
@@ -167,6 +188,23 @@ export function useUpload(groupId: Ref<string>, onDone: () => Promise<void>) {
       batches.push(current);
     }
     return batches;
+  }
+
+  /** 文件夹导入时按文件夹名建组：同名分组复用，创建失败则回落到当前选中分组 */
+  async function resolveFolderGroups(targets: UploadFile[]): Promise<Map<string, string>> {
+    const mapping = new Map<string, string>();
+    if (!folderAsGroup.value) {
+      return mapping;
+    }
+    const folders = [...new Set(targets.map(item => item.folder).filter((f): f is string => Boolean(f)))];
+    for (const folder of folders) {
+      try {
+        mapping.set(folder, await ensureGroup(folder));
+      } catch (error) {
+        console.error("[upload] 创建分组失败", folder, error);
+      }
+    }
+    return mapping;
   }
 
   async function submit() {
@@ -183,13 +221,16 @@ export function useUpload(groupId: Ref<string>, onDone: () => Promise<void>) {
     let completedBytes = 0;
 
     try {
-      for (const batch of buildBatches(targets)) {
+      const folderGroups = await resolveFolderGroups(targets);
+      const groupOf = (item: UploadFile) => (item.folder && folderGroups.get(item.folder)) || groupId.value;
+
+      for (const batch of buildBatches(targets, groupOf)) {
         const batchBytes = batch.reduce((sum, item) => sum + item.file.size, 0);
         batch.forEach(item => {
           item.status = "uploading";
         });
         try {
-          const result = await uploadBatch(batch, (loaded) => {
+          const result = await uploadBatch(batch, groupOf(batch[0]!), (loaded) => {
             uploadedBytes.value = completedBytes + loaded;
           });
           result.results.forEach((entry, index) => {
@@ -255,6 +296,9 @@ export function useUpload(groupId: Ref<string>, onDone: () => Promise<void>) {
     totalBytesText,
     uploadedBytesText,
     addFiles,
+    addCollected,
+    screening,
+    hasFolders,
     removeFile,
     reset,
     submit,

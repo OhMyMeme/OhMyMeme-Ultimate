@@ -11,57 +11,56 @@ env:
   IS_PRERELEASE: ${{ contains(github.ref_name, '-') }}
 
 jobs:
-  build-web:
-    name: Build Web
+  build-server:
+    name: Build Server
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: package-lock.json
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build:web
+      # 离线构建依赖仓库内 rust-server/vendor/（.cargo/config.toml 已替换 crates-io 源）
+      - name: Build server (release, offline)
+        working-directory: rust-server
+        run: cargo build --release --offline
 
       - name: Assemble release folder
-        working-directory: nuxt-app
+        working-directory: rust-server
         run: |
           mkdir -p dist/ohmymeme-ultimate
-          cp -r .output dist/ohmymeme-ultimate/.output
-          cp release/start.mjs dist/ohmymeme-ultimate/
-          cp release/start.bat dist/ohmymeme-ultimate/
-          cp release/start.sh dist/ohmymeme-ultimate/
-          cp release/README.txt dist/ohmymeme-ultimate/README.txt
+          cp target/release/ohmymeme-server dist/ohmymeme-ultimate/ohmymeme-server
+          cp scripts/start.sh dist/ohmymeme-ultimate/start.sh
+          cp scripts/start.bat dist/ohmymeme-ultimate/start.bat
+          cp scripts/README.txt dist/ohmymeme-ultimate/README.txt
           cp .env.example dist/ohmymeme-ultimate/.env.example
           chmod +x dist/ohmymeme-ultimate/start.sh
 
       - name: Create archives
-        working-directory: nuxt-app/dist
+        working-directory: rust-server/dist
         run: |
           tar -czf "ohmymeme-ultimate-${TAG}.tar.gz" ohmymeme-ultimate
           python3 -c "import shutil; shutil.make_archive('ohmymeme-ultimate-${TAG}', 'zip', '.', 'ohmymeme-ultimate')"
 
-      - name: Upload web artifacts
+      - name: Upload server artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: web-dist
+          name: server-dist
           path: |
-            nuxt-app/dist/*.tar.gz
-            nuxt-app/dist/*.zip
+            rust-server/target/release/ohmymeme-server
+            rust-server/dist/*.tar.gz
+            rust-server/dist/*.zip
           if-no-files-found: error
 
   build-desktop:
     name: Build Desktop
     runs-on: windows-latest
+    env:
+      # 自动更新签名私钥（tauri build 的 createUpdaterArtifacts 与 signer sign 均会读取）
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -84,17 +83,47 @@ jobs:
         working-directory: tauri-app
         run: npm run tauri build
 
+      - name: Sign installer and generate update manifest
+        shell: pwsh
+        working-directory: tauri-app
+        run: |
+          # 定位 NSIS 安装包（形如 OhMyMeme_<version>_x64-setup.exe，productName 来自 tauri.conf.json）
+          $installer = Get-ChildItem "src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
+          if (-not $installer) { throw "未找到 NSIS 安装包" }
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw "缺少 secrets.TAURI_SIGNING_PRIVATE_KEY" }
+          $installerPath = $installer.FullName
+
+          # -w/--private-key-path 需要密钥文件路径：私钥内容写入临时文件（不入库、不随产物上传）
+          $privateKeyFile = Join-Path $env:RUNNER_TEMP "ohmymeme-private.key"
+          Set-Content -Path $privateKeyFile -Value $env:TAURI_SIGNING_PRIVATE_KEY -NoNewline
+          $sig = (npx --no-install tauri signer sign -w $privateKeyFile $installerPath | Out-String).Trim()
+          if (-not $sig) { throw "tauri signer sign 未输出签名" }
+
+          $tauriConfig = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $version = $tauriConfig.version
+          $exeName = $installer.Name
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG/$exeName"
+
+          node scripts/make-update-manifest.mjs `
+            --version $version `
+            --installer $installerPath `
+            --signature $sig `
+            --url $url `
+            --notes "OhMyMeme ${version} release" `
+            --out latest.json
+
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v4
         with:
           name: desktop-dist
           path: |
             tauri-app/src-tauri/target/release/bundle/nsis/*-setup.exe
+            tauri-app/latest.json
           if-no-files-found: error
 
   publish:
     name: Publish release
-    needs: [build-web, build-desktop]
+    needs: [build-server, build-desktop]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -113,4 +142,7 @@ jobs:
           make_latest: ${{ env.IS_PRERELEASE == 'false' }}
           files: |
             dist/*.tar.gz
+            dist/*.zip
             dist/*.exe
+            dist/latest.json
+            dist/ohmymeme-server

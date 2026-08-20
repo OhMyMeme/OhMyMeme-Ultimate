@@ -10,17 +10,20 @@ const props = withDefaults(defineProps<{
   closeable?: boolean
   /** 弹窗宽度类，默认 16rem（256px，100% 缩放时 = 24px 边距 ×2 + 208px 内容区） */
   widthClass?: string
+  /** 是否显示 footer 顶部分隔线，默认 true；内容与操作区无需分割时（如上传/导入弹窗）传 false */
+  footerDivider?: boolean
 }>(), {
   dismissible: true,
   closeable: true,
-  widthClass: 'w-64'
+  widthClass: 'w-64',
+  footerDivider: true
 })
 
 const modalUi = computed(() => ({
   content: `${props.widthClass} max-w-[calc(100vw-3rem)]`,
   header: 'flex items-center justify-between gap-2 border-b border-default px-6 py-3',
   body: 'px-6 py-4',
-  footer: 'app-modal-footer flex items-center gap-2 border-t border-default px-6 py-3'
+  footer: `app-modal-footer flex items-center gap-2 px-6 py-3${props.footerDivider ? ' border-t border-default' : ''}`
 }))
 </script>
 

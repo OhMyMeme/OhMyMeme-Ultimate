@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 pub const THUMB_SIZE: u32 = 256;
+/// 导入分辨率上限（最长边 2K）：超限图片解码/缩略图成本高，直接拒绝入库。
+pub const MAX_IMAGE_EDGE: u32 = 2560;
 
 const EXTENSIONS: [(&str, &str); 5] = [
     ("image/jpeg", ".jpg"),
@@ -84,6 +86,15 @@ impl Storage {
     pub async fn remove(&self, key: &str) {
         let _ = tokio::fs::remove_file(self.path_for(key)).await;
     }
+}
+
+/// Read image dimensions from headers only (no full decode), for the import size guard.
+pub fn probe_dimensions(data: &[u8]) -> Option<(u32, u32)> {
+    image::ImageReader::new(std::io::Cursor::new(data))
+        .with_guessed_format()
+        .ok()?
+        .into_dimensions()
+        .ok()
 }
 
 /// Generate a 256x256 WebP thumbnail (cover fit, without enlargement), GIF takes first frame.
