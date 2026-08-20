@@ -124,8 +124,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force ..\dist-staging | Out-Null
-          Copy-Item "src-tauri/target/release/bundle/nsis/"*-setup.exe ..\dist-staging\
-          Copy-Item latest.json ..\dist-staging\
+          Copy-Item -Path "src-tauri/target/release/bundle/nsis/*-setup.exe" -Destination ..\dist-staging\
+          Copy-Item -Path "latest.json" -Destination ..\dist-staging\
 
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v4
