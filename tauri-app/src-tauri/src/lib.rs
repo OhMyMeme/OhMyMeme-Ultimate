@@ -211,7 +211,7 @@ pub fn run() {
                 eprintln!("[shortcut] 注册全局快捷键 {DEFAULT_SHORTCUT} 失败: {e}");
             }
 
-            let show = MenuItem::with_id(app, "show", "显示 OhMyMeme", true, None::<&str>)?;
+            let show = MenuItem::with_id(app, "show", "显示 OhMyMemeUltimate Desktop", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
 

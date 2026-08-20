@@ -75,7 +75,7 @@ async function connect() {
           </div>
           <div>
             <h1 class="text-xl font-semibold text-highlighted">
-              OhMyMeme Desktop
+              OhMyMemeUltimate Desktop
             </h1>
             <p class="mt-1 text-sm text-muted">
               连接到表情包管理服务器

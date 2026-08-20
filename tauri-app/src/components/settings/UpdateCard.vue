@@ -54,7 +54,7 @@ onMounted(async () => {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <p class="text-sm font-medium text-highlighted">
-          OhMyMeme 桌面端
+          OhMyMemeUltimate Desktop
         </p>
         <p class="text-xs text-muted">
           当前版本 {{ version }}

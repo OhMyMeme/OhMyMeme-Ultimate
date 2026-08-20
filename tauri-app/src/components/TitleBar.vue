@@ -51,7 +51,7 @@ function closeWindow() {
         <UIcon name="i-lucide-smile" class="size-3" />
       </div>
       <span class="text-xs font-semibold tracking-tight text-highlighted">
-        OhMyMeme
+        OhMyMemeUltimate Desktop
       </span>
     </div>
 

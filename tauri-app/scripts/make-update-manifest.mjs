@@ -1,10 +1,10 @@
-// OhMyMeme 桌面端自动更新清单生成器（tauri-plugin-updater v2 的 latest.json）
+// OhMyMemeUltimate Desktop 自动更新清单生成器（tauri-plugin-updater v2 的 latest.json）
 // 用法：
 //   node make-update-manifest.mjs \
 //     --version 0.3.0 \
-//     --installer OhMyMeme_0.3.0_x64-setup.exe \
+//     --installer OhMyMemeUltimate_Desktop_0.3.0_x64-setup.exe \
 //     --signature <tauri signer sign 输出的 base64 签名> \
-//     --url https://github.com/<owner>/<repo>/releases/download/v0.3.0/OhMyMeme_0.3.0_x64-setup.exe \
+//     --url https://github.com/<owner>/<repo>/releases/download/v0.3.0/OhMyMemeUltimate_Desktop_0.3.0_x64-setup.exe \
 //     [--notes "更新说明"] \
 //     [--out latest.json]
 import { existsSync, writeFileSync } from 'node:fs'

@@ -11,9 +11,17 @@ env:
   IS_PRERELEASE: ${{ contains(github.ref_name, '-') }}
 
 jobs:
+  # 服务端双平台构建（matrix）：
+  #   - ubuntu-latest  → 在线构建，产出 OhMyMemeUltimate_Server_<version>_linux-x86_64.tar.gz
+  #   - windows-latest → 在线构建（Windows runner 有网络），产出 OhMyMemeUltimate_Server_<version>_windows-x86_64.zip
+  # version 统一从 tauri.conf.json 读取（与桌面端一致，如 0.5.0，不带 v 前缀）
   build-server:
-    name: Build Server
-    runs-on: ubuntu-latest
+    name: Build Server (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout
@@ -22,16 +30,32 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # CI（ubuntu）有网络，在线构建即可；本地 Windows 无 TLS 时才用 vendor 离线构建
+      # CI（ubuntu / windows runner）有网络，在线构建即可；本地 Windows 无 TLS 时才用 vendor 离线构建
       # （rust-server/.cargo/config.toml 把 crates-io 替换为本地 vendor 目录，vendor 不入库，
       #   故 CI 上必须先移除该配置，否则 cargo 会尝试从 checkout 中不存在的 vendor 拉依赖）
+      # 两平台统一用 bash（windows runner 自带 Git Bash），保证 rm -f 语义一致
       - name: Build server (release)
+        shell: bash
         working-directory: rust-server
         run: |
           rm -f .cargo/config.toml
           cargo build --release
 
-      - name: Assemble release folder
+      # 从 tauri.conf.json 读取 version（如 0.5.0，不带 v 前缀），写入 GITHUB_ENV 供后续打包/组装步骤使用
+      - name: Read version from tauri.conf.json
+        shell: bash
+        run: |
+          VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' tauri-app/src-tauri/tauri.conf.json | head -n 1 | tr -d '\r')
+          if [ -z "$VERSION" ]; then
+            echo "::error::无法从 tauri.conf.json 读取 version"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      # ---------- Linux (ubuntu) ----------
+      - name: Assemble release folder (linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
         working-directory: rust-server
         run: |
           mkdir -p dist/ohmymeme-ultimate
@@ -42,23 +66,64 @@ jobs:
           cp .env.example dist/ohmymeme-ultimate/.env.example
           chmod +x dist/ohmymeme-ultimate/start.sh
 
-      - name: Create archives
+      - name: Create linux archive (tar.gz)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
         working-directory: rust-server/dist
         run: |
-          tar -czf "ohmymeme-ultimate-${TAG}.tar.gz" ohmymeme-ultimate
-          python3 -c "import shutil; shutil.make_archive('ohmymeme-ultimate-${TAG}', 'zip', '.', 'ohmymeme-ultimate')"
+          tar -czf "OhMyMemeUltimate_Server_${VERSION}_linux-x86_64.tar.gz" ohmymeme-ultimate
 
-      - name: Stage server release files
+      - name: Stage server release files (linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
         working-directory: rust-server
         run: |
           mkdir -p ../dist-staging
           cp target/release/ohmymeme-server ../dist-staging/ohmymeme-server
-          cp dist/*.tar.gz dist/*.zip ../dist-staging/
+          cp "dist/OhMyMemeUltimate_Server_${VERSION}_linux-x86_64.tar.gz" ../dist-staging/
 
-      - name: Upload server artifacts
+      - name: Upload server artifacts (linux)
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: server-dist
+          name: server-dist-linux
+          path: dist-staging/
+          if-no-files-found: error
+
+      # ---------- Windows (windows) ----------
+      - name: Assemble release folder (windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        working-directory: rust-server
+        run: |
+          New-Item -ItemType Directory -Force dist\ohmymeme-ultimate | Out-Null
+          Copy-Item target\release\ohmymeme-server.exe dist\ohmymeme-ultimate\ohmymeme-server.exe
+          Copy-Item scripts\start.sh dist\ohmymeme-ultimate\start.sh
+          Copy-Item scripts\start.bat dist\ohmymeme-ultimate\start.bat
+          Copy-Item scripts\README.txt dist\ohmymeme-ultimate\README.txt
+          Copy-Item .env.example dist\ohmymeme-ultimate\.env.example
+
+      - name: Create windows archive (zip)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        working-directory: rust-server/dist
+        run: |
+          Compress-Archive -Path ohmymeme-ultimate -DestinationPath "OhMyMemeUltimate_Server_${env:VERSION}_windows-x86_64.zip" -Force
+
+      - name: Stage server release files (windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        working-directory: rust-server
+        run: |
+          New-Item -ItemType Directory -Force ..\dist-staging | Out-Null
+          Copy-Item target\release\ohmymeme-server.exe ..\dist-staging\ohmymeme-server.exe
+          Copy-Item "dist\OhMyMemeUltimate_Server_${env:VERSION}_windows-x86_64.zip" ..\dist-staging\
+
+      - name: Upload server artifacts (windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-dist-windows
           path: dist-staging/
           if-no-files-found: error
 
@@ -95,7 +160,7 @@ jobs:
         shell: pwsh
         working-directory: tauri-app
         run: |
-          # 定位 NSIS 安装包（形如 OhMyMeme_<version>_x64-setup.exe，productName 来自 tauri.conf.json）
+          # 定位 NSIS 安装包（Tauri 由 productName 派生，可能含空格，如 OhMyMemeUltimate Desktop_0.5.0_x64-setup.exe）
           $installer = Get-ChildItem "src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
           if (-not $installer) { throw "未找到 NSIS 安装包" }
           if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw "缺少 secrets.TAURI_SIGNING_PRIVATE_KEY" }
@@ -108,21 +173,30 @@ jobs:
 
           $tauriConfig = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
           $version = $tauriConfig.version
-          $exeName = $installer.Name
-          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG/$exeName"
+
+          # 统一发布命名：安装包重命名为 OhMyMemeUltimate_Desktop_<version>_x64-setup.exe（无空格，符合发布规范）
+          # 注意：签名在重命名之前完成（minisign 对字节签名，重命名不改变内容，但先签后改最稳妥）
+          $canonicalName = "OhMyMemeUltimate_Desktop_${version}_x64-setup.exe"
+          $canonicalPath = Join-Path $installer.DirectoryName $canonicalName
+          if ($installer.Name -ne $canonicalName) {
+            Rename-Item -Path $installerPath -NewName $canonicalName
+            $installerPath = $canonicalPath
+          }
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG/$canonicalName"
 
           node scripts/make-update-manifest.mjs `
             --version $version `
             --installer $installerPath `
             --signature $sig `
             --url $url `
-            --notes "OhMyMeme ${version} release" `
+            --notes "OhMyMemeUltimate ${version} release" `
             --out latest.json
 
       - name: Stage desktop release files
         working-directory: tauri-app
         shell: pwsh
         run: |
+          # 安装包已重命名为规范名 OhMyMemeUltimate_Desktop_<version>_x64-setup.exe，通配符 *-setup.exe 兼容
           New-Item -ItemType Directory -Force ..\dist-staging | Out-Null
           Copy-Item -Path "src-tauri/target/release/bundle/nsis/*-setup.exe" -Destination ..\dist-staging\
           Copy-Item -Path "latest.json" -Destination ..\dist-staging\
@@ -142,11 +216,17 @@ jobs:
       contents: write
 
     steps:
-      - name: Download server artifacts
+      - name: Download server artifacts (linux)
         uses: actions/download-artifact@v4
         with:
-          name: server-dist
-          path: release/server
+          name: server-dist-linux
+          path: release/server-linux
+
+      - name: Download server artifacts (windows)
+        uses: actions/download-artifact@v4
+        with:
+          name: server-dist-windows
+          path: release/server-windows
 
       - name: Download desktop artifacts
         uses: actions/download-artifact@v4
@@ -163,8 +243,7 @@ jobs:
           prerelease: ${{ env.IS_PRERELEASE }}
           make_latest: ${{ env.IS_PRERELEASE == 'false' }}
           files: |
-            release/server/ohmymeme-server
-            release/server/*.tar.gz
-            release/server/*.zip
+            release/server-linux/*.tar.gz
+            release/server-windows/*.zip
             release/desktop/*-setup.exe
             release/desktop/latest.json

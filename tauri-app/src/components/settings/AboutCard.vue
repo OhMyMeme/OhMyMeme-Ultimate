@@ -28,7 +28,7 @@ onMounted(async () => {
       <div class="flex items-center justify-between gap-4">
         <span class="text-muted">应用</span>
         <span class="text-highlighted">
-          OhMyMeme Desktop
+          OhMyMemeUltimate Desktop
         </span>
       </div>
       <div class="flex items-center justify-between gap-4">

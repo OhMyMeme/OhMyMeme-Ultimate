@@ -76,7 +76,7 @@ npm run reset:dev        # 一键清除开发数据（node rust-server/scripts/r
 
 ## 发布
 
-- 推送 `v*` tag 触发 `.github/workflows/release.yml`：`build-server`（Rust release 二进制 → 解压即用服务端包）+ `build-desktop`（Windows NSIS）+ `publish`（GitHub Release）。
+- 推送 `v*` tag 触发 `.github/workflows/release.yml`：`build-server`（CI matrix：Linux / Windows 双平台服务端包 `OhMyMemeUltimate_Server_<version>_linux-x86_64.tar.gz` / `_windows-x86_64.zip`）+ `build-desktop`（Windows NSIS 安装包 `OhMyMemeUltimate_Desktop_<version>_x64-setup.exe`）+ `publish`（GitHub Release，共 4 个资产：安装包 + 双平台服务端包 + `latest.json`）。
 - 服务端包资源（`rust-server/scripts/start.sh` / `start.bat` / `README.txt` / `.env.example`）需随仓库维护。
 - 打包清单、发布前检查与常见问题见 `RELEASE.md`（维护者本地文档，已 gitignore）。
 

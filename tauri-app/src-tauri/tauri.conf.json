@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "OhMyMeme",
+  "productName": "OhMyMemeUltimate Desktop",
   "version": "0.5.0",
   "identifier": "cn.lorien.ohmymeme",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "OhMyMeme Desktop",
+        "title": "OhMyMemeUltimate Desktop",
         "width": 960,
         "height": 600,
         "minWidth": 960,
