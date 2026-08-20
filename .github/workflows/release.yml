@@ -48,14 +48,18 @@ jobs:
           tar -czf "ohmymeme-ultimate-${TAG}.tar.gz" ohmymeme-ultimate
           python3 -c "import shutil; shutil.make_archive('ohmymeme-ultimate-${TAG}', 'zip', '.', 'ohmymeme-ultimate')"
 
+      - name: Stage server release files
+        working-directory: rust-server
+        run: |
+          mkdir -p ../dist-staging
+          cp target/release/ohmymeme-server ../dist-staging/ohmymeme-server
+          cp dist/*.tar.gz dist/*.zip ../dist-staging/
+
       - name: Upload server artifacts
         uses: actions/upload-artifact@v4
         with:
           name: server-dist
-          path: |
-            rust-server/target/release/ohmymeme-server
-            rust-server/dist/*.tar.gz
-            rust-server/dist/*.zip
+          path: dist-staging/
           if-no-files-found: error
 
   build-desktop:
@@ -115,13 +119,19 @@ jobs:
             --notes "OhMyMeme ${version} release" `
             --out latest.json
 
+      - name: Stage desktop release files
+        working-directory: tauri-app
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force ..\dist-staging | Out-Null
+          Copy-Item "src-tauri/target/release/bundle/nsis/"*-setup.exe ..\dist-staging\
+          Copy-Item latest.json ..\dist-staging\
+
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v4
         with:
           name: desktop-dist
-          path: |
-            tauri-app/src-tauri/target/release/bundle/nsis/*-setup.exe
-            tauri-app/latest.json
+          path: dist-staging/
           if-no-files-found: error
 
   publish:
@@ -132,11 +142,20 @@ jobs:
       contents: write
 
     steps:
-      - name: Download all artifacts
+      - name: Download server artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
-          merge-multiple: true
+          name: server-dist
+          path: release/server
+
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-dist
+          path: release/desktop
+
+      - name: List downloaded files
+        run: find release -type f
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -144,8 +163,8 @@ jobs:
           prerelease: ${{ env.IS_PRERELEASE }}
           make_latest: ${{ env.IS_PRERELEASE == 'false' }}
           files: |
-            dist/*.tar.gz
-            dist/*.zip
-            dist/*.exe
-            dist/latest.json
-            dist/ohmymeme-server
+            release/server/ohmymeme-server
+            release/server/*.tar.gz
+            release/server/*.zip
+            release/desktop/*-setup.exe
+            release/desktop/latest.json
